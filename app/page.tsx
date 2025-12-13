@@ -4,34 +4,39 @@ import { useState, useEffect, useRef } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useRouter } from 'next/navigation';
 import StepShell from '@/components/StepShell';
-import MoodOrb from '@/components/MoodOrb';
+import dynamic from 'next/dynamic';
 import CrownDial from '@/components/CrownDial';
 import SpeechButton from '@/components/SpeechButton';
+import Button from '@/components/ui/Button';
+import Card from '@/components/ui/Card';
+import LottieHero from '@/components/LottieHero';
+import ActivityAnimation from '@/components/ActivityAnimation';
+import PageAnimation from '@/components/PageAnimation';
 import { SessionState, AgentResponse } from '@/lib/types';
 import { saveEntry } from '@/lib/storage';
-import { speak, stopSpeaking } from '@/lib/elevenlabs';
+import { speak, stopSpeaking, setSpeechStateCallback } from '@/lib/elevenlabs';
 
-// Kid-friendly words
+// Words with soft gradient palettes and emojis
 const WORDS = [
-  { text: 'calm', emoji: '😌', color: '#E0F4F4' },
-  { text: 'buzzy', emoji: '⚡', color: '#FFF9B3' },
-  { text: 'heavy', emoji: '😔', color: '#D4E4FF' },
-  { text: 'wiggly', emoji: '🎉', color: '#FFE4E0' },
-  { text: 'okay', emoji: '🙂', color: '#E8E8E8' },
-  { text: 'tired', emoji: '😴', color: '#E8E8E8' },
-  { text: 'excited', emoji: '🤗', color: '#FFE9E0' },
-  { text: 'stuck', emoji: '😤', color: '#FFE0E0' },
-  { text: 'smooth', emoji: '✨', color: '#E8E0FF' },
-  { text: 'stormy', emoji: '⛈️', color: '#FFD0D0' },
+  { text: 'calm', emoji: '😌', gradient: 'from-blue-100 via-cyan-100 to-teal-100' },
+  { text: 'buzzy', emoji: '⚡', gradient: 'from-yellow-100 via-amber-100 to-orange-100' },
+  { text: 'heavy', emoji: '💭', gradient: 'from-indigo-100 via-blue-100 to-purple-100' },
+  { text: 'wiggly', emoji: '🐛', gradient: 'from-pink-100 via-rose-100 to-red-100' },
+  { text: 'okay', emoji: '👍', gradient: 'from-gray-100 via-slate-100 to-zinc-100' },
+  { text: 'tired', emoji: '😴', gradient: 'from-slate-100 via-gray-100 to-stone-100' },
+  { text: 'excited', emoji: '🎉', gradient: 'from-orange-100 via-amber-100 to-yellow-100' },
+  { text: 'stuck', emoji: '🧱', gradient: 'from-red-100 via-rose-100 to-pink-100' },
+  { text: 'smooth', emoji: '🌊', gradient: 'from-purple-100 via-violet-100 to-fuchsia-100' },
+  { text: 'stormy', emoji: '⛈️', gradient: 'from-gray-200 via-slate-200 to-zinc-200' },
 ];
 
 const IMPACTS = [
-  { text: 'school', emoji: '📚', color: '#E0F4F4' },
-  { text: 'friends', emoji: '🤝', color: '#FFE4E0' },
-  { text: 'home', emoji: '🏠', color: '#FFE0F7' },
-  { text: 'my body', emoji: '💪', color: '#E0FFE9' },
-  { text: 'something else', emoji: '🤷', color: '#F0F0F0' },
-  { text: 'not sure', emoji: '🤔', color: '#E8E0FF' },
+  { text: 'school', emoji: '🏫', gradient: 'from-blue-100 via-indigo-100 to-purple-100' },
+  { text: 'friends', emoji: '👫', gradient: 'from-pink-100 via-rose-100 to-orange-100' },
+  { text: 'home', emoji: '🏠', gradient: 'from-purple-100 via-pink-100 to-fuchsia-100' },
+  { text: 'my body', emoji: '💪', gradient: 'from-green-100 via-emerald-100 to-teal-100' },
+  { text: 'something else', emoji: '🤔', gradient: 'from-gray-100 via-slate-100 to-zinc-100' },
+  { text: 'not sure', emoji: '🤷', gradient: 'from-violet-100 via-purple-100 to-indigo-100' },
 ];
 
 const FALLBACK_ACTIVITIES = [
@@ -41,6 +46,18 @@ const FALLBACK_ACTIVITIES = [
   { text: 'Count backwards from 10 slowly, like you\'re counting down to a rocket launch!', type: 'focus' },
   { text: 'Draw a quick doodle or write one word about how you feel. It can be anything!', type: 'creative' },
 ];
+
+// Step configuration
+const STEP_CONFIG: Record<string, { step: number; phase?: 'Sense' | 'Support' | 'Act' }> = {
+  intro: { step: 0 },
+  intensity: { step: 1, phase: 'Sense' },
+  words: { step: 2, phase: 'Sense' },
+  impact: { step: 3, phase: 'Sense' },
+  support: { step: 4, phase: 'Support' },
+  closing: { step: 5 },
+};
+
+const TOTAL_STEPS = 5;
 
 export default function CheckInPage() {
   const router = useRouter();
@@ -53,11 +70,22 @@ export default function CheckInPage() {
   const [isLoadingActivity, setIsLoadingActivity] = useState(false);
   const [isMuted, setIsMuted] = useState(false);
   const [isProcessing, setIsProcessing] = useState(false);
+  const [isSpeaking, setIsSpeaking] = useState(false);
   const speechTimeoutRef = useRef<NodeJS.Timeout | null>(null);
 
-  // Auto-speak when step changes - kid-friendly messages
+  // Set up speech state callback
   useEffect(() => {
-    if (isMuted) return;
+    setSpeechStateCallback((speaking: boolean) => {
+      setIsSpeaking(speaking);
+    });
+  }, []);
+
+  // Auto-speak when step changes
+  useEffect(() => {
+    if (isMuted) {
+      stopSpeaking();
+      return;
+    }
 
     if (speechTimeoutRef.current) {
       clearTimeout(speechTimeoutRef.current);
@@ -70,49 +98,38 @@ export default function CheckInPage() {
 
       switch (step) {
         case 'intro':
-          textToSpeak = "Hi there! Ready to check in with how you're feeling? Tap the button when you're ready to start!";
+          textToSpeak = "How are you feeling? Let's check in together.";
           break;
         case 'intensity':
-          textToSpeak = "How big is this feeling? Turn the dial or scroll to show me. You can make it bigger or smaller!";
+          textToSpeak = "How big is this feeling? Turn the dial to show me.";
           break;
         case 'words':
-          textToSpeak = "Do any of these words feel right? Tap the ones that match how you're feeling. You can pick more than one!";
+          textToSpeak = "Do any words fit? Tap the ones that feel right.";
           break;
         case 'impact':
-          textToSpeak = "What's making you feel this way? Pick what feels most true for you right now.";
+          textToSpeak = "What's making you feel this way? Pick what feels most true.";
           break;
         case 'support':
-          if (currentActivity) {
-            textToSpeak = currentActivity.text;
-          } else {
-            textToSpeak = "Let's try something fun together! This might help you feel a little better.";
-          }
+          textToSpeak = "Let's try something fun! This might help you feel better.";
           break;
         case 'closing':
-          textToSpeak = "You did such a great job checking in! I'm proud of you. You can see your history if you want!";
+          textToSpeak = "You did amazing! I'm so proud of you.";
           break;
       }
 
-      if (textToSpeak) {
-        speak(textToSpeak, { rate: 0.75, pitch: 1.15 });
+      if (textToSpeak && !isMuted) {
+        speak(textToSpeak, { rate: 0.75, pitch: 1.15 }).catch(err => {
+          console.log('Speech error (non-blocking):', err);
+        });
       }
-    }, 300);
+    }, 500);
 
     return () => {
       if (speechTimeoutRef.current) {
         clearTimeout(speechTimeoutRef.current);
       }
     };
-  }, [step, isMuted, currentActivity]);
-
-  // Speak when activity loads
-  useEffect(() => {
-    if (step === 'support' && currentActivity && !isMuted) {
-      setTimeout(() => {
-        speak(currentActivity.text, { rate: 0.75, pitch: 1.15 });
-      }, 500);
-    }
-  }, [currentActivity, step, isMuted]);
+  }, [step, isMuted]);
 
   useEffect(() => {
     if (step === 'support' && activityIndex < 3 && !currentActivity && !isLoadingActivity) {
@@ -160,51 +177,21 @@ export default function CheckInPage() {
     }
   };
 
-  const handleWithDelay = async (callback: () => void, speechText?: string) => {
-    if (isProcessing) {
-      console.log('Already processing, ignoring click');
-      return;
-    }
-    
-    setIsProcessing(true);
-    
-    try {
-      if (speechText && !isMuted) {
-        speak(speechText, { rate: 0.75, pitch: 1.15 }).catch((err) => {
-          console.log('Speech failed, continuing...', err);
-        });
-        // Don't wait for speech, just start it
-        await new Promise(resolve => setTimeout(resolve, 200));
-      }
-      
-      callback();
-    } catch (error) {
-      console.error('Error in handleWithDelay:', error);
-    } finally {
-      // Reset processing state after a short delay
-      setTimeout(() => {
-        setIsProcessing(false);
-      }, 100);
-    }
-  };
-
   const handleNext = () => {
+    stopSpeaking();
+    
     if (step === 'intensity') {
-      handleWithDelay(() => setStep('words'), "Great! Let's pick some words now.");
+      setStep('words');
     } else if (step === 'words') {
-      handleWithDelay(() => setStep('impact'), "Nice choices! Now let's see what's making you feel this way.");
+      setStep('impact');
     } else if (step === 'impact') {
-      handleWithDelay(() => {
-        setStep('support');
-        setActivityIndex(0);
-        setCurrentActivity(null);
-      }, "Thanks for sharing! Let's try something fun together.");
+      setStep('support');
+      setActivityIndex(0);
+      setCurrentActivity(null);
     } else if (step === 'support') {
       if (activityIndex < 2) {
-        handleWithDelay(() => {
-          setActivityIndex(prev => prev + 1);
-          setCurrentActivity(null);
-        });
+        setActivityIndex(prev => prev + 1);
+        setCurrentActivity(null);
       } else {
         saveEntry({
           intensity,
@@ -212,20 +199,20 @@ export default function CheckInPage() {
           impact,
           activityType: currentActivity?.type || null,
         });
-        handleWithDelay(() => setStep('closing'), "You did amazing! All done!");
+        setStep('closing');
       }
     }
   };
 
   const handleSkip = () => {
+    stopSpeaking();
+    
     if (step === 'words' || step === 'impact') {
       handleNext();
     } else if (step === 'support') {
       if (activityIndex < 2) {
-        handleWithDelay(() => {
-          setActivityIndex(prev => prev + 1);
-          setCurrentActivity(null);
-        });
+        setActivityIndex(prev => prev + 1);
+        setCurrentActivity(null);
       } else {
         saveEntry({
           intensity,
@@ -233,53 +220,23 @@ export default function CheckInPage() {
           impact,
           activityType: null,
         });
-        handleWithDelay(() => setStep('closing'), "All done! Great job!");
+        setStep('closing');
       }
     }
   };
 
   const toggleWord = (word: string) => {
+    if (isSpeaking) return;
+    
     setSelectedWords(prev =>
       prev.includes(word) ? prev.filter(w => w !== word) : [...prev, word]
     );
-    if (!isMuted) {
-      const wordObj = WORDS.find(w => w.text === word);
-      speak(`You picked ${word}!`, { rate: 0.75, pitch: 1.15 });
-    }
   };
 
-  const Button = ({ onClick, children, variant = 'primary', disabled, emoji }: { onClick: () => void; children: React.ReactNode; variant?: 'primary' | 'secondary'; disabled?: boolean; emoji?: string }) => {
-    const isButtonDisabled = disabled || isProcessing;
-    
-    const handleClick = (e: React.MouseEvent) => {
-      e.preventDefault();
-      e.stopPropagation();
-      console.log('Button clicked, disabled:', isButtonDisabled, 'isProcessing:', isProcessing);
-      if (!isButtonDisabled && onClick) {
-        onClick();
-      }
-    };
-    
-    return (
-      <motion.button
-        onClick={handleClick}
-        disabled={isButtonDisabled}
-        className={`px-8 py-4 rounded-full font-medium text-lg transition-colors relative z-10 cursor-pointer ${
-          variant === 'primary'
-            ? 'bg-gradient-to-r from-blue-300 to-purple-300 text-white hover:from-blue-400 hover:to-purple-400 disabled:opacity-50 disabled:cursor-not-allowed shadow-md'
-            : 'bg-white/70 text-gray-700 hover:bg-white/90 disabled:opacity-50 disabled:cursor-not-allowed shadow-sm'
-        }`}
-        whileHover={isButtonDisabled ? {} : { scale: 1.05 }}
-        whileTap={isButtonDisabled ? {} : { scale: 0.95 }}
-      >
-        {emoji && <span className="mr-2">{emoji}</span>}
-        {children}
-      </motion.button>
-    );
-  };
+  const config = STEP_CONFIG[step];
 
   return (
-    <>
+    <div className="min-h-screen">
       <SpeechButton isMuted={isMuted} onToggle={() => {
         setIsMuted(!isMuted);
         if (!isMuted) {
@@ -297,36 +254,26 @@ export default function CheckInPage() {
           >
             <StepShell 
               title="How are you feeling?"
-              subtitle="Let's check in together"
-              gradient="from-blue-50 via-purple-50 to-pink-50"
+              subtitle="Let&apos;s check in together"
+              showBack={false}
             >
-              <div className="flex flex-col items-center gap-8">
-                <motion.div
-                  initial={{ scale: 0.9, opacity: 0 }}
-                  animate={{ scale: 1, opacity: 1 }}
-                  transition={{ delay: 0.2 }}
-                  className="text-6xl mb-4"
-                >
-                  👋
-                </motion.div>
+              <div className="flex flex-col items-center gap-4">
                 <motion.div
                   initial={{ scale: 0.9, opacity: 0 }}
                   animate={{ scale: 1, opacity: 1 }}
                   transition={{ delay: 0.3 }}
                 >
-                  <MoodOrb intensity={50} size={200} />
+                  <PageAnimation step="intro" size={200} />
                 </motion.div>
                 <Button 
                   onClick={() => {
-                    console.log('Let\'s Begin clicked!');
-                    handleWithDelay(() => {
-                      console.log('Setting step to intensity');
+                    stopSpeaking();
+                    setTimeout(() => {
                       setStep('intensity');
-                    }, "Awesome! Let's get started!");
-                  }} 
-                  emoji="🌟"
+                    }, 200);
+                  }}
                 >
-                  Let's Begin!
+                  Let&apos;s Begin
                 </Button>
               </div>
             </StepShell>
@@ -348,11 +295,16 @@ export default function CheckInPage() {
                 stopSpeaking();
                 setStep('intro');
               }}
-              gradient="from-yellow-50 via-pink-50 to-purple-50"
+              currentStep={config.step}
+              totalSteps={TOTAL_STEPS}
+              phase={config.phase}
             >
-              <div className="flex flex-col items-center gap-12">
+              <div className="flex flex-col items-center gap-4">
+                <PageAnimation step="intensity" intensity={intensity} size={180} />
                 <CrownDial value={intensity} onChange={setIntensity} />
-                <Button onClick={handleNext} disabled={isProcessing} emoji="✅">All Done!</Button>
+                <Button onClick={handleNext} disabled={isProcessing || isSpeaking}>
+                  Continue
+                </Button>
               </div>
             </StepShell>
           </motion.div>
@@ -373,39 +325,50 @@ export default function CheckInPage() {
                 stopSpeaking();
                 setStep('intensity');
               }}
-              gradient="from-green-50 via-blue-50 to-indigo-50"
+              currentStep={config.step}
+              totalSteps={TOTAL_STEPS}
+              phase={config.phase}
             >
-              <div className="flex flex-col items-center gap-8">
-                <div className="grid grid-cols-2 gap-4 w-full relative z-10">
-                  {WORDS.map(word => (
-                    <motion.button
-                      key={word.text}
-                      onClick={(e) => {
-                        e.preventDefault();
-                        e.stopPropagation();
-                        toggleWord(word.text);
-                      }}
-                      className={`px-6 py-4 rounded-2xl font-medium text-lg transition-all backdrop-blur-sm relative z-10 ${
-                        selectedWords.includes(word.text)
-                          ? 'bg-white text-gray-700 shadow-md'
-                          : 'bg-white/70 text-gray-600 hover:bg-white/90 shadow-sm'
-                      }`}
-                      style={selectedWords.includes(word.text) ? {
-                        background: `linear-gradient(135deg, ${word.color} 0%, white 100%)`
-                      } : {}}
-                      whileHover={{ scale: 1.05 }}
-                      whileTap={{ scale: 0.95 }}
-                    >
-                      <div className="flex items-center justify-center gap-2">
-                        <span className="text-2xl">{word.emoji}</span>
-                        <span>{word.text}</span>
-                      </div>
-                    </motion.button>
-                  ))}
+              <div className="flex flex-col items-center gap-4">
+                <PageAnimation step="words" intensity={intensity} words={selectedWords} size={160} />
+                <div className="grid grid-cols-2 gap-3 w-full">
+                  {WORDS.map(word => {
+                    const isSelected = selectedWords.includes(word.text);
+                    return (
+                      <motion.button
+                        key={word.text}
+                        onClick={(e) => {
+                          e.preventDefault();
+                          e.stopPropagation();
+                          if (!isSpeaking) {
+                            toggleWord(word.text);
+                          }
+                        }}
+                        disabled={isSpeaking}
+                        className={`px-4 py-3 m-1 rounded-2xl font-medium text-base transition-all relative overflow-hidden flex items-center justify-center gap-2 ${
+                          isSpeaking 
+                            ? 'opacity-50 cursor-wait bg-white/60 text-gray-500'
+                            : isSelected
+                            ? `text-gray-800 shadow-md ring-2 ring-blue-400/50 bg-gradient-to-br ${word.gradient}`
+                            : 'bg-white/80 text-gray-700 hover:bg-white hover:shadow-md shadow-sm border border-gray-200'
+                        }`}
+                        whileHover={isSpeaking ? {} : { scale: 1.02 }}
+                        whileTap={isSpeaking ? {} : { scale: 0.98 }}
+                        transition={{ duration: 0.2 }}
+                      >
+                        <span className="text-xl">{word.emoji}</span>
+                        <span className="relative z-10">{word.text}</span>
+                      </motion.button>
+                    );
+                  })}
                 </div>
-                <div className="flex gap-4">
-                  <Button onClick={handleNext} disabled={isProcessing} emoji="✅">Done!</Button>
-                  <Button onClick={handleSkip} variant="secondary" disabled={isProcessing}>Skip</Button>
+                <div className="flex gap-3 w-full">
+                  <Button onClick={handleNext} disabled={isProcessing || isSpeaking} className="flex-1">
+                    Done
+                  </Button>
+                  <Button onClick={handleSkip} variant="secondary" disabled={isProcessing || isSpeaking}>
+                    Skip
+                  </Button>
                 </div>
               </div>
             </StepShell>
@@ -420,48 +383,54 @@ export default function CheckInPage() {
             exit={{ opacity: 0 }}
           >
             <StepShell
-              title="What's making you feel this way?"
+              title="What&apos;s making you feel this way?"
               subtitle="Pick what feels most true"
               showBack
               onBack={() => {
                 stopSpeaking();
                 setStep('words');
               }}
-              gradient="from-indigo-50 via-purple-50 to-pink-50"
+              currentStep={config.step}
+              totalSteps={TOTAL_STEPS}
+              phase={config.phase}
             >
-              <div className="flex flex-col items-center gap-8">
-                <div className="grid grid-cols-2 gap-4 w-full relative z-10">
-                  {IMPACTS.map(imp => (
-                    <motion.button
-                      key={imp.text}
-                      onClick={(e) => {
-                        e.preventDefault();
-                        e.stopPropagation();
-                        setImpact(imp.text);
-                        if (!isMuted) {
-                          speak(`You picked ${imp.text}!`, { rate: 0.75, pitch: 1.15 }).catch(() => {});
-                        }
-                        setTimeout(() => handleNext(), 400);
-                      }}
-                      className={`px-6 py-4 rounded-2xl font-medium text-lg transition-all backdrop-blur-sm relative z-10 ${
-                        impact === imp.text
-                          ? 'bg-white text-gray-700 shadow-md'
-                          : 'bg-white/70 text-gray-600 hover:bg-white/90 shadow-sm'
-                      }`}
-                      style={impact === imp.text ? {
-                        background: `linear-gradient(135deg, ${imp.color} 0%, white 100%)`
-                      } : {}}
-                      whileHover={{ scale: 1.05 }}
-                      whileTap={{ scale: 0.95 }}
-                    >
-                      <div className="flex flex-col items-center gap-2">
-                        <span className="text-3xl">{imp.emoji}</span>
-                        <span>{imp.text}</span>
-                      </div>
-                    </motion.button>
-                  ))}
+              <div className="flex flex-col items-center gap-4">
+                <PageAnimation step="impact" intensity={intensity} words={selectedWords} size={160} />
+                <div className="grid grid-cols-2 gap-3 w-full">
+                  {IMPACTS.map(imp => {
+                    const isSelected = impact === imp.text;
+                    return (
+                      <motion.button
+                        key={imp.text}
+                        onClick={(e) => {
+                          e.preventDefault();
+                          e.stopPropagation();
+                          if (isSpeaking) return;
+                          stopSpeaking();
+                          setImpact(imp.text);
+                          setTimeout(() => handleNext(), 300);
+                        }}
+                        disabled={isSpeaking}
+                        className={`px-4 py-4 m-1 rounded-2xl font-medium text-base transition-all relative overflow-hidden flex items-center justify-center gap-2 ${
+                          isSpeaking
+                            ? 'opacity-50 cursor-wait bg-white/60 text-gray-500'
+                            : isSelected
+                            ? `text-gray-800 shadow-md ring-2 ring-purple-400/50 bg-gradient-to-br ${imp.gradient}`
+                            : 'bg-white/80 text-gray-700 hover:bg-white hover:shadow-md shadow-sm border border-gray-200'
+                        }`}
+                        whileHover={isSpeaking ? {} : { scale: 1.02 }}
+                        whileTap={isSpeaking ? {} : { scale: 0.98 }}
+                        transition={{ duration: 0.2 }}
+                      >
+                        <span className="text-xl">{imp.emoji}</span>
+                        <span className="relative z-10">{imp.text}</span>
+                      </motion.button>
+                    );
+                  })}
                 </div>
-                <Button onClick={handleSkip} variant="secondary" disabled={isProcessing}>Skip</Button>
+                <Button onClick={handleSkip} variant="secondary" disabled={isProcessing || isSpeaking}>
+                  Skip
+                </Button>
               </div>
             </StepShell>
           </motion.div>
@@ -475,39 +444,56 @@ export default function CheckInPage() {
             exit={{ opacity: 0 }}
           >
             <StepShell 
-              title="Let's try something fun!"
+              title="Let&apos;s try something fun!"
               subtitle="This might help you feel better"
-              gradient="from-purple-50 via-pink-50 to-red-50"
+              showBack
+              onBack={() => {
+                stopSpeaking();
+                setStep('impact');
+              }}
+              currentStep={config.step}
+              totalSteps={TOTAL_STEPS}
+              phase={config.phase}
             >
-              <div className="flex flex-col items-center gap-8">
-                <MoodOrb intensity={intensity} words={selectedWords} size={250} />
-                
+              <div className="flex flex-col items-center gap-3">
                 {isLoadingActivity ? (
-                  <div className="text-gray-500 text-xl">Loading something fun...</div>
+                  <div className="text-gray-500 text-lg">Loading something fun...</div>
                 ) : currentActivity ? (
                   <>
-                    <motion.div
-                      className="bg-white/80 backdrop-blur-sm rounded-3xl p-6 shadow-lg max-w-sm"
-                      initial={{ opacity: 0, y: 20 }}
-                      animate={{ opacity: 1, y: 0 }}
-                    >
-                      <p className="text-xl text-gray-700 text-center leading-relaxed">
+                    {/* Activity Animation - fills the gap */}
+                    <ActivityAnimation 
+                      activityType={currentActivity.type}
+                      words={selectedWords}
+                      size={200}
+                    />
+                    
+                    <Card padding="lg" className="w-full">
+                      <p className="text-lg text-gray-700 text-center leading-relaxed">
                         {currentActivity.text}
                       </p>
-                    </motion.div>
-                    <div className="flex gap-4 flex-wrap justify-center">
-                      <Button onClick={handleNext} disabled={isProcessing} emoji="✨">I'll Try It!</Button>
-                      <Button onClick={() => {
-                        setCurrentActivity(null);
-                        if (activityIndex < 2) {
-                          setActivityIndex(prev => prev + 1);
-                        } else {
-                          loadActivity();
-                        }
-                      }} variant="secondary" disabled={isProcessing}>
+                    </Card>
+                    <div className="flex gap-3 w-full flex-wrap">
+                      <Button onClick={handleNext} disabled={isProcessing || isSpeaking} className="flex-1 min-w-[120px]">
+                        I&apos;ll Try It
+                      </Button>
+                      <Button 
+                        onClick={() => {
+                          stopSpeaking();
+                          setCurrentActivity(null);
+                          if (activityIndex < 2) {
+                            setActivityIndex(prev => prev + 1);
+                          } else {
+                            loadActivity();
+                          }
+                        }} 
+                        variant="secondary" 
+                        disabled={isProcessing || isSpeaking}
+                      >
                         Different one
                       </Button>
-                      <Button onClick={handleSkip} variant="secondary" disabled={isProcessing}>Skip</Button>
+                      <Button onClick={handleSkip} variant="secondary" disabled={isProcessing || isSpeaking}>
+                        Skip
+                      </Button>
                     </div>
                   </>
                 ) : null}
@@ -525,34 +511,26 @@ export default function CheckInPage() {
           >
             <StepShell 
               title="You did amazing!"
-              subtitle="I'm so proud of you"
-              gradient="from-green-50 via-blue-50 to-purple-50"
+              subtitle="I&apos;m so proud of you"
             >
-              <div className="flex flex-col items-center gap-8">
-                <motion.div
-                  initial={{ scale: 0.9 }}
-                  animate={{ scale: 1 }}
-                  className="text-7xl mb-4"
-                >
-                  ⭐
-                </motion.div>
-                <MoodOrb intensity={intensity} words={selectedWords} size={200} />
-                <Button onClick={() => router.push('/history')} disabled={isProcessing} emoji="📊">
+              <div className="flex flex-col items-center gap-4">
+                <PageAnimation step="closing" intensity={intensity} words={selectedWords} size={200} />
+                <Button onClick={() => router.push('/history')} disabled={isProcessing}>
                   See My History
                 </Button>
                 <motion.p
-                  className="text-lg text-gray-500 text-center"
+                  className="text-base text-gray-500 text-center"
                   initial={{ opacity: 0 }}
                   animate={{ opacity: 1 }}
                   transition={{ delay: 0.5 }}
                 >
-                  Great job checking in today! 🌟
+                  Great job checking in today!
                 </motion.p>
               </div>
             </StepShell>
           </motion.div>
         )}
       </AnimatePresence>
-    </>
+    </div>
   );
 }

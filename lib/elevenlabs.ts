@@ -3,28 +3,38 @@
 
 let currentAudio: HTMLAudioElement | null = null;
 let isSpeaking = false;
+let speechQueue: Array<{ text: string; options: any }> = [];
+let isProcessingQueue = false;
 
 export const speak = async (text: string, options: { rate?: number; pitch?: number; volume?: number } = {}): Promise<void> => {
-  // Stop any current speech
-  if (currentAudio && isSpeaking) {
-    currentAudio.pause();
-    currentAudio.currentTime = 0;
-    if (currentAudio.src) {
-      URL.revokeObjectURL(currentAudio.src);
-    }
-  }
+  // Always stop any current speech first
+  stopSpeaking();
+  
+  // Clear any pending speech in queue
+  speechQueue = [];
+  
+  // Small delay to ensure previous audio is fully stopped
+  await new Promise(resolve => setTimeout(resolve, 100));
 
   // Get API key and Voice ID from environment variables
-  // Fallback to default voice ID if not set
-  const apiKey = process.env.NEXT_PUBLIC_ELEVENLABS_API_KEY || '';
-  const voiceId = process.env.NEXT_PUBLIC_ELEVENLABS_VOICE_ID || 'ocZQ262SsZb9RIxcQBOj';
+  // In Next.js, NEXT_PUBLIC_ vars are available at runtime in the browser
+  const apiKey = typeof window !== 'undefined' 
+    ? (process.env.NEXT_PUBLIC_ELEVENLABS_API_KEY || '')
+    : (process.env.NEXT_PUBLIC_ELEVENLABS_API_KEY || '');
+  
+  // Your preferred voice ID - ensure it's in .env.local as NEXT_PUBLIC_ELEVENLABS_VOICE_ID
+  const voiceId = typeof window !== 'undefined'
+    ? (process.env.NEXT_PUBLIC_ELEVENLABS_VOICE_ID || 'yj30vwTGJxSHezdAGsv9')
+    : (process.env.NEXT_PUBLIC_ELEVENLABS_VOICE_ID || 'yj30vwTGJxSHezdAGsv9');
 
-  // Debug logging
+  // Debug logging - always log to help debug
   if (typeof window !== 'undefined') {
-    console.log('ElevenLabs Config:', { 
+    console.log('🔊 ElevenLabs Config:', { 
       hasApiKey: !!apiKey, 
       hasVoiceId: !!voiceId,
-      voiceId: voiceId
+      voiceId: voiceId,
+      envVoiceId: process.env.NEXT_PUBLIC_ELEVENLABS_VOICE_ID,
+      usingVoiceId: voiceId
     });
   }
 
@@ -34,6 +44,10 @@ export const speak = async (text: string, options: { rate?: number; pitch?: numb
   }
 
   try {
+    // Log the exact voice ID being used
+    console.log('🎤 Using Voice ID:', voiceId);
+    console.log('🎤 Full API URL:', `https://api.elevenlabs.io/v1/text-to-speech/${voiceId}`);
+    
     const response = await fetch(`https://api.elevenlabs.io/v1/text-to-speech/${voiceId}`, {
       method: 'POST',
       headers: {
@@ -62,6 +76,7 @@ export const speak = async (text: string, options: { rate?: number; pitch?: numb
     
     currentAudio = new Audio(audioUrl);
     isSpeaking = true;
+    if (speechStateCallback) speechStateCallback(true);
 
     return new Promise((resolve, reject) => {
       if (!currentAudio) {
@@ -71,12 +86,14 @@ export const speak = async (text: string, options: { rate?: number; pitch?: numb
 
       currentAudio.onended = () => {
         isSpeaking = false;
+        if (speechStateCallback) speechStateCallback(false);
         URL.revokeObjectURL(audioUrl);
         resolve();
       };
       
       currentAudio.onerror = (error) => {
         isSpeaking = false;
+        if (speechStateCallback) speechStateCallback(false);
         URL.revokeObjectURL(audioUrl);
         console.error('Audio playback error:', error);
         reject(error);
@@ -84,6 +101,7 @@ export const speak = async (text: string, options: { rate?: number; pitch?: numb
 
       currentAudio.play().catch((error) => {
         isSpeaking = false;
+        if (speechStateCallback) speechStateCallback(false);
         URL.revokeObjectURL(audioUrl);
         console.error('Audio play error:', error);
         reject(error);
@@ -104,30 +122,64 @@ const speakFallback = (text: string, options: { rate?: number; pitch?: number; v
       return;
     }
 
+    isSpeaking = true;
+    if (speechStateCallback) speechStateCallback(true);
+
     const utterance = new SpeechSynthesisUtterance(text);
     utterance.rate = options.rate || 0.85;
     utterance.pitch = options.pitch || 1.1;
     utterance.volume = options.volume || 1.0;
     
-    utterance.onend = () => resolve();
-    utterance.onerror = (error) => reject(error);
+    utterance.onend = () => {
+      isSpeaking = false;
+      if (speechStateCallback) speechStateCallback(false);
+      resolve();
+    };
+    utterance.onerror = (error) => {
+      isSpeaking = false;
+      if (speechStateCallback) speechStateCallback(false);
+      reject(error);
+    };
     
     window.speechSynthesis.speak(utterance);
   });
 };
 
 export const stopSpeaking = (): void => {
+  // Stop ElevenLabs audio
   if (currentAudio) {
-    currentAudio.pause();
-    currentAudio.currentTime = 0;
-    if (currentAudio.src) {
-      URL.revokeObjectURL(currentAudio.src);
+    try {
+      currentAudio.pause();
+      currentAudio.currentTime = 0;
+      if (currentAudio.src && currentAudio.src.startsWith('blob:')) {
+        URL.revokeObjectURL(currentAudio.src);
+      }
+    } catch (e) {
+      console.log('Error stopping audio:', e);
     }
-    isSpeaking = false;
+    currentAudio = null;
   }
+  
+  // Stop browser speech synthesis
   if (typeof window !== 'undefined' && 'speechSynthesis' in window) {
-    window.speechSynthesis.cancel();
+    try {
+      window.speechSynthesis.cancel();
+    } catch (e) {
+      console.log('Error canceling speech synthesis:', e);
+    }
   }
+  
+  isSpeaking = false;
+  speechQueue = [];
+  isProcessingQueue = false;
+  if (speechStateCallback) speechStateCallback(false);
 };
 
 export const isCurrentlySpeaking = (): boolean => isSpeaking;
+
+// Callback to notify when speech starts/ends
+let speechStateCallback: ((speaking: boolean) => void) | null = null;
+
+export const setSpeechStateCallback = (callback: (speaking: boolean) => void) => {
+  speechStateCallback = callback;
+};

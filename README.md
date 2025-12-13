@@ -5,7 +5,7 @@ A calm, premium experience for checking in with your feelings, inspired by Apple
 ## Features
 
 - **Circular Dial Interface**: Digital Crown-style intensity selection (0-100)
-- **Mood Orb Visualization**: Dynamic, breathing orb that changes color based on intensity
+- **3D Mascot Character**: Cute 3D animated character that floats gently and plays idle animations
 - **Word Selection**: Simple, kid-safe descriptors
 - **AI-Powered Support**: Personalized micro-activities based on your check-in
 - **History & Insights**: View patterns and associations over time
@@ -17,6 +17,8 @@ A calm, premium experience for checking in with your feelings, inspired by Apple
 - Tailwind CSS
 - Framer Motion
 - Recharts
+- Three.js & React Three Fiber (3D mascot)
+- Lottie React (background animations)
 
 ## Getting Started
 
@@ -56,9 +58,12 @@ unpack/
 │   ├── layout.tsx
 │   └── globals.css
 ├── components/
-│   ├── MoodOrb.tsx       # Visual mood orb
+│   ├── MoodMascot3D.tsx  # 3D animated mascot character
 │   ├── CrownDial.tsx     # Circular dial interface
 │   └── StepShell.tsx     # Step wrapper component
+├── public/
+│   └── models/
+│       └── mascot.glb    # 3D character model (GLB format)
 ├── lib/
 │   ├── types.ts          # TypeScript types
 │   └── storage.ts        # localStorage utilities
@@ -82,14 +87,26 @@ All entries are stored locally in `localStorage` under the key `unpack_entries`.
 
 The app uses `/api/agent` to generate personalized activities. Update `app/api/agent/route.ts` with your actual agent implementation.
 
+## 3D Mascot Setup
+
+1. **Add your GLB model:**
+   - Place your 3D character file at: `public/models/mascot.glb`
+   - Format: GLB (binary glTF)
+   - Recommended: Include idle animation
+   - See `public/models/README.md` for details
+
+2. **If model doesn't exist:**
+   - App will show a loading fallback
+   - Add your `mascot.glb` file and it will automatically appear
+
 ## Design Principles
 
-- Dark background with soft gradients
-- Center mood orb that responds to selections
+- Bright, vibrant backgrounds with soft gradients
+- 3D mascot character that floats gently in the center
 - Circular dial interaction (like Digital Crown)
 - Large, minimal text with high contrast
-- Smooth micro-animations
-- Always feels calm and premium
+- Smooth micro-animations with breathing Lottie backgrounds
+- Always feels calm, premium, and kid-friendly
 
 ## Safety
 

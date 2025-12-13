@@ -17,6 +17,8 @@ import {
 import { UnpackEntry } from '@/lib/types';
 import { getRecentEntries, getAllWords, getAssociations } from '@/lib/storage';
 import StepShell from '@/components/StepShell';
+import Card from '@/components/ui/Card';
+import Button from '@/components/ui/Button';
 
 export default function HistoryPage() {
   const router = useRouter();
@@ -52,35 +54,33 @@ export default function HistoryPage() {
   }));
 
   return (
-    <StepShell title="Your History">
-      <div className="w-full max-w-2xl space-y-12">
+      <StepShell 
+        title="Your History"
+      >
+      <div className="w-full space-y-6">
         {/* Intensity over time */}
-        <motion.div
-          initial={{ opacity: 0, y: 20 }}
-          animate={{ opacity: 1, y: 0 }}
-          className="bg-white/5 rounded-3xl p-6 backdrop-blur-sm"
-        >
-          <h2 className="text-2xl font-light text-white/90 mb-6">Intensity over time</h2>
+        <Card>
+          <h2 className="text-xl font-light text-gray-800 mb-6">Intensity over time</h2>
           {entries.length > 0 ? (
             <ResponsiveContainer width="100%" height={200}>
               <LineChart data={chartData}>
-                <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.1)" />
+                <CartesianGrid strokeDasharray="3 3" stroke="rgba(0,0,0,0.05)" />
                 <XAxis
                   dataKey="date"
-                  stroke="rgba(255,255,255,0.4)"
+                  stroke="rgba(0,0,0,0.3)"
                   style={{ fontSize: '12px' }}
                 />
                 <YAxis
                   domain={[0, 100]}
-                  stroke="rgba(255,255,255,0.4)"
+                  stroke="rgba(0,0,0,0.3)"
                   style={{ fontSize: '12px' }}
                 />
                 <Tooltip
                   contentStyle={{
-                    backgroundColor: 'rgba(0,0,0,0.8)',
-                    border: '1px solid rgba(255,255,255,0.1)',
+                    backgroundColor: 'rgba(255,255,255,0.95)',
+                    border: '1px solid rgba(0,0,0,0.1)',
                     borderRadius: '12px',
-                    color: '#fff',
+                    color: '#000',
                   }}
                 />
                 <Line
@@ -93,83 +93,63 @@ export default function HistoryPage() {
               </LineChart>
             </ResponsiveContainer>
           ) : (
-            <p className="text-white/40 text-center py-8">No entries yet</p>
+            <p className="text-gray-400 text-center py-8">No entries yet</p>
           )}
-        </motion.div>
+        </Card>
 
         {/* Top words */}
-        <motion.div
-          initial={{ opacity: 0, y: 20 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ delay: 0.1 }}
-          className="bg-white/5 rounded-3xl p-6 backdrop-blur-sm"
-        >
-          <h2 className="text-2xl font-light text-white/90 mb-6">Words you've used</h2>
+        <Card>
+          <h2 className="text-xl font-light text-gray-800 mb-6">Words you&apos;ve used</h2>
           {wordCounts.length > 0 ? (
             <ResponsiveContainer width="100%" height={200}>
               <BarChart data={wordCounts}>
-                <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.1)" />
+                <CartesianGrid strokeDasharray="3 3" stroke="rgba(0,0,0,0.05)" />
                 <XAxis
                   dataKey="word"
-                  stroke="rgba(255,255,255,0.4)"
+                  stroke="rgba(0,0,0,0.3)"
                   style={{ fontSize: '12px' }}
                 />
                 <YAxis
-                  stroke="rgba(255,255,255,0.4)"
+                  stroke="rgba(0,0,0,0.3)"
                   style={{ fontSize: '12px' }}
                 />
                 <Tooltip
                   contentStyle={{
-                    backgroundColor: 'rgba(0,0,0,0.8)',
-                    border: '1px solid rgba(255,255,255,0.1)',
+                    backgroundColor: 'rgba(255,255,255,0.95)',
+                    border: '1px solid rgba(0,0,0,0.1)',
                     borderRadius: '12px',
-                    color: '#fff',
+                    color: '#000',
                   }}
                 />
                 <Bar dataKey="count" fill="#06b6d4" radius={[8, 8, 0, 0]} />
               </BarChart>
             </ResponsiveContainer>
           ) : (
-            <p className="text-white/40 text-center py-8">No words selected yet</p>
+            <p className="text-gray-400 text-center py-8">No words selected yet</p>
           )}
-        </motion.div>
+        </Card>
 
         {/* Associations */}
         {(associations.timeOfDay || associations.weekdayPattern) && (
-          <motion.div
-            initial={{ opacity: 0, y: 20 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ delay: 0.2 }}
-            className="bg-white/5 rounded-3xl p-6 backdrop-blur-sm"
-          >
-            <h2 className="text-2xl font-light text-white/90 mb-6">Associations</h2>
-            <div className="space-y-4 text-white/70">
+          <Card>
+            <h2 className="text-xl font-light text-gray-800 mb-6">Associations</h2>
+            <div className="space-y-4 text-gray-600">
               {associations.timeOfDay && (
-                <p>Most check-ins happen in the <span className="text-white/90 font-medium">{associations.timeOfDay}</span>.</p>
+                <p>Most check-ins happen in the <span className="text-gray-800 font-medium">{associations.timeOfDay}</span>.</p>
               )}
               {associations.weekdayPattern && (
-                <p>Intensity tends to be higher on <span className="text-white/90 font-medium">{associations.weekdayPattern}</span>.</p>
+                <p>Intensity tends to be higher on <span className="text-gray-800 font-medium">{associations.weekdayPattern}</span>.</p>
               )}
             </div>
-          </motion.div>
+          </Card>
         )}
 
         {/* Back button */}
-        <motion.div
-          initial={{ opacity: 0 }}
-          animate={{ opacity: 1 }}
-          transition={{ delay: 0.3 }}
-          className="flex justify-center"
-        >
-          <motion.button
-            onClick={() => router.push('/')}
-            className="px-8 py-4 rounded-full bg-white/10 text-white hover:bg-white/20 font-medium transition-colors"
-            whileHover={{ scale: 1.05 }}
-            whileTap={{ scale: 0.95 }}
-          >
+        <div className="flex justify-center pt-4">
+          <Button onClick={() => router.push('/')}>
             New check-in
-          </motion.button>
-        </motion.div>
+          </Button>
+        </div>
       </div>
     </StepShell>
   );

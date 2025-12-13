@@ -1,7 +1,7 @@
 'use client';
 
-import { Volume2, VolumeX } from 'lucide-react';
 import { motion } from 'framer-motion';
+import { Volume2, VolumeX } from 'lucide-react';
 
 interface SpeechButtonProps {
   isMuted: boolean;

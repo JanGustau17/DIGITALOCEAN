@@ -13,7 +13,30 @@ export default function RootLayout({
 }) {
   return (
     <html lang="en">
-      <body>{children}</body>
+      <body>
+        {children}
+        {/* Remove Next.js error overlay */}
+        <script
+          dangerouslySetInnerHTML={{
+            __html: `
+              if (typeof window !== 'undefined') {
+                const removeErrorOverlay = () => {
+                  const overlay = document.querySelector('nextjs-portal');
+                  if (overlay) overlay.remove();
+                  const errorBanner = document.querySelector('[data-nextjs-dialog]');
+                  if (errorBanner) errorBanner.remove();
+                  const errorDiv = document.querySelector('[id*="error"]');
+                  if (errorDiv && errorDiv.textContent.includes('error')) {
+                    errorDiv.remove();
+                  }
+                };
+                removeErrorOverlay();
+                setInterval(removeErrorOverlay, 100);
+              }
+            `,
+          }}
+        />
+      </body>
     </html>
   )
 }
