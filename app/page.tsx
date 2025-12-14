@@ -5,7 +5,7 @@ import { motion, AnimatePresence } from 'framer-motion';
 import { useRouter } from 'next/navigation';
 import StepShell from '@/components/StepShell';
 import dynamic from 'next/dynamic';
-import CrownDial from '@/components/CrownDial';
+import IntensitySlider from '@/components/IntensitySlider';
 import SpeechButton from '@/components/SpeechButton';
 import Button from '@/components/ui/Button';
 import Card from '@/components/ui/Card';
@@ -68,7 +68,14 @@ export default function CheckInPage() {
   const [activityIndex, setActivityIndex] = useState(0);
   const [currentActivity, setCurrentActivity] = useState<{ text: string; type: string } | null>(null);
   const [isLoadingActivity, setIsLoadingActivity] = useState(false);
-  const [isMuted, setIsMuted] = useState(false);
+  // Load mute state from localStorage
+  const [isMuted, setIsMuted] = useState(() => {
+    if (typeof window !== 'undefined') {
+      const saved = localStorage.getItem('unpack_muted');
+      return saved === 'true';
+    }
+    return false;
+  });
   const [isProcessing, setIsProcessing] = useState(false);
   const [isSpeaking, setIsSpeaking] = useState(false);
   const speechTimeoutRef = useRef<NodeJS.Timeout | null>(null);
@@ -80,19 +87,22 @@ export default function CheckInPage() {
     });
   }, []);
 
-  // Auto-speak when step changes
+  // Auto-speak when step changes - no pause, immediate speech
   useEffect(() => {
     if (isMuted) {
       stopSpeaking();
       return;
     }
 
+    // Clear any pending speech
     if (speechTimeoutRef.current) {
       clearTimeout(speechTimeoutRef.current);
     }
 
+    // Stop current speech immediately
     stopSpeaking();
 
+    // Start speaking immediately (reduced delay for continuous feel)
     speechTimeoutRef.current = setTimeout(() => {
       let textToSpeak = '';
 
@@ -101,7 +111,7 @@ export default function CheckInPage() {
           textToSpeak = "How are you feeling? Let's check in together.";
           break;
         case 'intensity':
-          textToSpeak = "How big is this feeling? Turn the dial to show me.";
+          textToSpeak = "How big is this feeling? Move the slider to show me.";
           break;
         case 'words':
           textToSpeak = "Do any words fit? Tap the ones that feel right.";
@@ -118,11 +128,12 @@ export default function CheckInPage() {
       }
 
       if (textToSpeak && !isMuted) {
+        // Speak immediately without blocking
         speak(textToSpeak, { rate: 0.75, pitch: 1.15 }).catch(err => {
           console.log('Speech error (non-blocking):', err);
         });
       }
-    }, 500);
+    }, 100); // Reduced from 500ms to 100ms for faster, continuous feel
 
     return () => {
       if (speechTimeoutRef.current) {
@@ -238,8 +249,12 @@ export default function CheckInPage() {
   return (
     <div className="min-h-screen">
       <SpeechButton isMuted={isMuted} onToggle={() => {
-        setIsMuted(!isMuted);
-        if (!isMuted) {
+        const newMuted = !isMuted;
+        setIsMuted(newMuted);
+        if (typeof window !== 'undefined') {
+          localStorage.setItem('unpack_muted', String(newMuted));
+        }
+        if (!newMuted) {
           stopSpeaking();
         }
       }} />
@@ -257,7 +272,7 @@ export default function CheckInPage() {
               subtitle="Let&apos;s check in together"
               showBack={false}
             >
-              <div className="flex flex-col items-center gap-2 sm:gap-3 md:gap-4 w-full">
+              <div className="flex flex-col items-center gap-6 w-full">
                 <motion.div
                   initial={{ scale: 0.9, opacity: 0 }}
                   animate={{ scale: 1, opacity: 1 }}
@@ -265,17 +280,19 @@ export default function CheckInPage() {
                 >
                   <PageAnimation step="intro" size={140} />
                 </motion.div>
-                <Button 
-                  onClick={() => {
-                    stopSpeaking();
-                    setTimeout(() => {
-                      setStep('intensity');
-                    }, 200);
-                  }}
-                  className="w-full max-w-xs touch-manipulation"
-                >
-                  Let&apos;s Begin
-                </Button>
+                <div className="w-full flex justify-center pt-2">
+                  <Button 
+                    onClick={() => {
+                      stopSpeaking();
+                      setTimeout(() => {
+                        setStep('intensity');
+                      }, 200);
+                    }}
+                    className="w-full max-w-xs touch-manipulation"
+                  >
+                    Let&apos;s Begin
+                  </Button>
+                </div>
               </div>
             </StepShell>
           </motion.div>
@@ -300,24 +317,24 @@ export default function CheckInPage() {
               totalSteps={TOTAL_STEPS}
               phase={config.phase}
             >
-              <div className="flex flex-col items-center gap-2 sm:gap-3 md:gap-4 w-full relative">
+              <div className="flex flex-col items-center gap-6 w-full">
                 <PageAnimation step="intensity" intensity={intensity} size={120} />
-                <div className="relative" style={{ pointerEvents: 'auto' }}>
-                  <CrownDial value={intensity} onChange={setIntensity} size={180} />
+                <IntensitySlider value={intensity} onChange={setIntensity} />
+                <div className="w-full flex flex-col items-center gap-4 pt-4">
+                  <Button 
+                    onClick={() => {
+                      if (!isProcessing && !isSpeaking) {
+                        stopSpeaking();
+                        handleNext();
+                      }
+                    }} 
+                    disabled={isProcessing || isSpeaking}
+                    className="w-full max-w-xs touch-manipulation"
+                    size="md"
+                  >
+                    Continue
+                  </Button>
                 </div>
-                <Button 
-                  onClick={() => {
-                    if (!isProcessing && !isSpeaking) {
-                      stopSpeaking();
-                      handleNext();
-                    }
-                  }} 
-                  disabled={isProcessing || isSpeaking}
-                  className="w-full max-w-xs mt-2 touch-manipulation relative z-50"
-                  size="md"
-                >
-                  Continue
-                </Button>
               </div>
             </StepShell>
           </motion.div>
@@ -375,11 +392,11 @@ export default function CheckInPage() {
                     );
                   })}
                 </div>
-                <div className="flex gap-3 w-full">
+                <div className="flex gap-3 w-full pt-2">
                   <Button onClick={handleNext} disabled={isProcessing || isSpeaking} className="flex-1">
                     Done
                   </Button>
-                  <Button onClick={handleSkip} variant="secondary" disabled={isProcessing || isSpeaking}>
+                  <Button onClick={handleSkip} variant="secondary" disabled={isProcessing || isSpeaking} size="sm">
                     Skip
                   </Button>
                 </div>
@@ -407,9 +424,9 @@ export default function CheckInPage() {
               totalSteps={TOTAL_STEPS}
               phase={config.phase}
             >
-              <div className="flex flex-col items-center gap-2 sm:gap-3 md:gap-4 w-full">
+              <div className="flex flex-col items-center gap-6 w-full">
                 <PageAnimation step="impact" intensity={intensity} words={selectedWords} size={100} />
-                <div className="grid grid-cols-2 gap-2 sm:gap-3 w-full">
+                <div className="grid grid-cols-2 gap-3 w-full">
                   {IMPACTS.map(imp => {
                     const isSelected = impact === imp.text;
                     return (
@@ -441,19 +458,21 @@ export default function CheckInPage() {
                     );
                   })}
                 </div>
-                <Button 
-                  onClick={() => {
-                    if (!isProcessing && !isSpeaking) {
-                      stopSpeaking();
-                      handleSkip();
-                    }
-                  }} 
-                  variant="secondary" 
-                  disabled={isProcessing || isSpeaking}
-                  className="w-full max-w-xs touch-manipulation"
-                >
-                  Skip
-                </Button>
+                <div className="w-full flex justify-center pt-2">
+                  <Button 
+                    onClick={() => {
+                      if (!isProcessing && !isSpeaking) {
+                        stopSpeaking();
+                        handleSkip();
+                      }
+                    }} 
+                    variant="secondary" 
+                    disabled={isProcessing || isSpeaking}
+                    className="w-full max-w-xs touch-manipulation"
+                  >
+                    Skip
+                  </Button>
+                </div>
               </div>
             </StepShell>
           </motion.div>
@@ -478,24 +497,24 @@ export default function CheckInPage() {
               totalSteps={TOTAL_STEPS}
               phase={config.phase}
             >
-              <div className="flex flex-col items-center gap-2 sm:gap-3 w-full">
+              <div className="flex flex-col items-center gap-6 w-full">
                 {isLoadingActivity ? (
                   <div className="text-gray-500 text-base sm:text-lg">Loading something fun...</div>
                 ) : currentActivity ? (
                   <>
-                    {/* Activity Animation - fills the gap */}
+                    {/* Activity Animation */}
                     <ActivityAnimation 
                       activityType={currentActivity.type}
                       words={selectedWords}
                       size={140}
                     />
                     
-                    <Card padding="md" className="w-full">
+                    <Card padding="md" className="w-full mb-4">
                       <p className="text-sm sm:text-base md:text-lg text-gray-700 text-center leading-relaxed">
                         {currentActivity.text}
                       </p>
                     </Card>
-                    <div className="flex flex-col sm:flex-row gap-2 sm:gap-3 w-full">
+                    <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 w-full">
                       <Button 
                         onClick={() => {
                           if (!isProcessing && !isSpeaking) {
@@ -504,43 +523,41 @@ export default function CheckInPage() {
                           }
                         }} 
                         disabled={isProcessing || isSpeaking} 
-                        className="flex-1 w-full touch-manipulation"
+                        className="w-full touch-manipulation whitespace-nowrap sm:col-span-1"
                       >
                         I&apos;ll Try It
                       </Button>
-                      <div className="flex gap-2 sm:gap-3">
-                        <Button 
-                          onClick={() => {
+                      <Button 
+                        onClick={() => {
+                          stopSpeaking();
+                          setCurrentActivity(null);
+                          if (activityIndex < 2) {
+                            setActivityIndex(prev => prev + 1);
+                          } else {
+                            loadActivity();
+                          }
+                        }} 
+                        variant="secondary" 
+                        disabled={isProcessing || isSpeaking}
+                        className="w-full touch-manipulation whitespace-nowrap"
+                        size="sm"
+                      >
+                        Different
+                      </Button>
+                      <Button 
+                        onClick={() => {
+                          if (!isProcessing && !isSpeaking) {
                             stopSpeaking();
-                            setCurrentActivity(null);
-                            if (activityIndex < 2) {
-                              setActivityIndex(prev => prev + 1);
-                            } else {
-                              loadActivity();
-                            }
-                          }} 
-                          variant="secondary" 
-                          disabled={isProcessing || isSpeaking}
-                          className="flex-1 touch-manipulation"
-                          size="sm"
-                        >
-                          Different one
-                        </Button>
-                        <Button 
-                          onClick={() => {
-                            if (!isProcessing && !isSpeaking) {
-                              stopSpeaking();
-                              handleSkip();
-                            }
-                          }} 
-                          variant="secondary" 
-                          disabled={isProcessing || isSpeaking}
-                          className="flex-1 touch-manipulation"
-                          size="sm"
-                        >
-                          Skip
-                        </Button>
-                      </div>
+                            handleSkip();
+                          }
+                        }} 
+                        variant="secondary" 
+                        disabled={isProcessing || isSpeaking}
+                        className="w-full touch-manipulation whitespace-nowrap"
+                        size="sm"
+                      >
+                        Skip
+                      </Button>
                     </div>
                   </>
                 ) : null}
@@ -560,19 +577,22 @@ export default function CheckInPage() {
               title="You did amazing!"
               subtitle="I&apos;m so proud of you"
             >
-              <div className="flex flex-col items-center gap-2 sm:gap-3 md:gap-4 w-full">
+              <div className="flex flex-col items-center gap-6 w-full">
                 <PageAnimation step="closing" intensity={intensity} words={selectedWords} size={140} />
-                <Button 
-                  onClick={() => {
-                    if (!isProcessing) {
-                      router.push('/history');
-                    }
-                  }} 
-                  disabled={isProcessing}
-                  className="w-full max-w-xs touch-manipulation"
-                >
-                  See My History
-                </Button>
+                <div className="w-full flex justify-center pt-2">
+                  <Button 
+                    onClick={() => {
+                      if (!isProcessing) {
+                        router.push('/history');
+                      }
+                    }} 
+                    disabled={isProcessing}
+                    className="w-full max-w-xs touch-manipulation"
+                  >
+                    See My History
+                  </Button>
+                </div>
+                </div>
                 <motion.p
                   className="text-base text-gray-500 text-center"
                   initial={{ opacity: 0 }}
@@ -581,7 +601,6 @@ export default function CheckInPage() {
                 >
                   Great job checking in today!
                 </motion.p>
-              </div>
             </StepShell>
           </motion.div>
         )}

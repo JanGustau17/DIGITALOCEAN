@@ -23,15 +23,15 @@ export default function Button({
   const baseStyles = 'rounded-full font-medium transition-all duration-200 focus:outline-none focus:ring-2 focus:ring-offset-2 disabled:opacity-50 disabled:cursor-not-allowed';
   
   const sizeStyles = {
-    sm: 'px-4 py-2 text-sm',
-    md: 'px-6 py-3 text-base',
-    lg: 'px-8 py-4 text-lg',
+    sm: 'px-4 py-2.5 text-sm h-10',
+    md: 'px-6 py-3 text-base h-12',
+    lg: 'px-8 py-4 text-lg h-14',
   };
 
   const variantStyles = {
-    primary: 'bg-[#F9A32A] text-white shadow-lg hover:shadow-xl hover:bg-[#E8931F] focus:ring-[#F9A32A] relative z-30 transition-colors',
-    secondary: 'bg-white/80 backdrop-blur-md border border-gray-200 text-gray-800 hover:bg-white focus:ring-gray-400 relative z-30',
-    ghost: 'bg-transparent text-gray-700 hover:bg-white/20 focus:ring-gray-400 relative z-30',
+    primary: 'bg-[#F9A32A] text-white shadow-lg hover:shadow-xl hover:bg-[#E8931F] focus:ring-[#F9A32A] relative z-30 transition-all active:scale-95',
+    secondary: 'bg-white/80 backdrop-blur-md border border-gray-200 text-gray-800 hover:bg-white focus:ring-gray-400 relative z-30 active:scale-95',
+    ghost: 'bg-transparent text-gray-700 hover:bg-white/20 focus:ring-gray-400 relative z-30 active:scale-95',
   };
 
   return (

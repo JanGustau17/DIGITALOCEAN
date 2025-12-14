@@ -1,7 +1,7 @@
 'use client';
 
-import { motion, useMotionValue, useTransform, PanInfo } from 'framer-motion';
-import { useEffect, useRef, useState } from 'react';
+import { motion, useMotionValue, useTransform } from 'framer-motion';
+import { useEffect, useRef, useState, useCallback } from 'react';
 
 interface CrownDialProps {
   value: number; // 0-100
@@ -12,6 +12,7 @@ interface CrownDialProps {
 export default function CrownDial({ value, onChange, size = 240 }: CrownDialProps) {
   const [isDragging, setIsDragging] = useState(false);
   const containerRef = useRef<HTMLDivElement>(null);
+  const knobRef = useRef<HTMLDivElement>(null);
   const rotation = useMotionValue(valueToRotation(value));
   const lastAngleRef = useRef<number | null>(null);
   
@@ -34,33 +35,49 @@ export default function CrownDial({ value, onChange, size = 240 }: CrownDialProp
     }
   }, [value, isDragging, rotation]);
 
-  const handleDragStart = () => {
+  // Calculate knob position from rotation
+  const getKnobPosition = useCallback((rot: number) => {
+    const responsiveSize = typeof window !== 'undefined' && window.innerWidth < 640 
+      ? Math.min(size, 200) 
+      : size;
+    const strokeWidth = 6;
+    const radius = (responsiveSize - strokeWidth * 2) / 2;
+    const centerX = responsiveSize / 2;
+    const centerY = responsiveSize / 2;
+    
+    // Convert rotation to radians
+    // Rotation 0° = top (12 o'clock), so we subtract 90° to align with standard math coordinates
+    // Then convert to radians
+    const angleRad = ((rot - 90) * Math.PI) / 180;
+    
+    // Calculate knob position on circle (standard trigonometry)
+    // cos/sin give us the position relative to center
+    const knobX = centerX + radius * Math.cos(angleRad);
+    const knobY = centerY + radius * Math.sin(angleRad);
+    
+    return { x: knobX, y: knobY };
+  }, [size]);
+
+  const knobPosition = useTransform(rotation, (rot) => getKnobPosition(rot));
+
+  const handlePointerDown = useCallback((e: React.PointerEvent) => {
+    if (!containerRef.current || !knobRef.current) return;
+    
+    e.preventDefault();
     setIsDragging(true);
     lastAngleRef.current = null;
-  };
+    knobRef.current.setPointerCapture(e.pointerId);
+  }, []);
 
-  const handleDrag = (event: MouseEvent | TouchEvent | PointerEvent, info: PanInfo) => {
-    if (!containerRef.current) return;
+  const handlePointerMove = useCallback((e: React.PointerEvent) => {
+    if (!isDragging || !containerRef.current) return;
     
     const rect = containerRef.current.getBoundingClientRect();
     const centerX = rect.left + rect.width / 2;
     const centerY = rect.top + rect.height / 2;
     
-    // Get current pointer position
-    const clientX = 'touches' in event && event.touches.length > 0 
-      ? event.touches[0].clientX 
-      : 'clientX' in event 
-        ? event.clientX 
-        : centerX;
-    const clientY = 'touches' in event && event.touches.length > 0 
-      ? event.touches[0].clientY 
-      : 'clientY' in event 
-        ? event.clientY 
-        : centerY;
-    
-    // Calculate angle from center (in radians, then convert to degrees)
-    // atan2 gives angle from positive x-axis, we adjust to start from top (0° = top)
-    const angleRad = Math.atan2(clientY - centerY, clientX - centerX);
+    // Calculate angle from center
+    const angleRad = Math.atan2(e.clientY - centerY, e.clientX - centerX);
     let angleDeg = (angleRad * 180) / Math.PI + 90; // +90 to start from top
     if (angleDeg < 0) angleDeg += 360;
     if (angleDeg >= 360) angleDeg -= 360;
@@ -83,12 +100,15 @@ export default function CrownDial({ value, onChange, size = 240 }: CrownDialProp
     }
     
     lastAngleRef.current = angleDeg;
-  };
+  }, [isDragging, rotation, onChange]);
 
-  const handleDragEnd = () => {
+  const handlePointerUp = useCallback((e: React.PointerEvent) => {
+    if (knobRef.current) {
+      knobRef.current.releasePointerCapture(e.pointerId);
+    }
     setIsDragging(false);
     lastAngleRef.current = null;
-  };
+  }, []);
 
   const handleWheel = (e: React.WheelEvent) => {
     e.preventDefault();
@@ -101,6 +121,19 @@ export default function CrownDial({ value, onChange, size = 240 }: CrownDialProp
     const newValue = rotationToValue(normalizedRot);
     onChange(Math.round(newValue));
   };
+
+  // Keyboard accessibility
+  const handleKeyDown = useCallback((e: React.KeyboardEvent) => {
+    if (e.key === 'ArrowLeft' || e.key === 'ArrowDown') {
+      e.preventDefault();
+      const step = e.shiftKey ? 5 : 1;
+      onChange(Math.max(0, value - step));
+    } else if (e.key === 'ArrowRight' || e.key === 'ArrowUp') {
+      e.preventDefault();
+      const step = e.shiftKey ? 5 : 1;
+      onChange(Math.min(100, value + step));
+    }
+  }, [value, onChange]);
 
   const getIntensityLabel = (val: number): string => {
     if (val < 25) return 'Low';
@@ -116,17 +149,14 @@ export default function CrownDial({ value, onChange, size = 240 }: CrownDialProp
   };
 
   const strokeWidth = 6;
-  const radius = (size - strokeWidth * 2) / 2;
+  const isMobile = typeof window !== 'undefined' && window.innerWidth < 640;
+  const responsiveSize = isMobile ? Math.min(size, 200) : size;
+  const radius = (responsiveSize - strokeWidth * 2) / 2;
   const circumference = 2 * Math.PI * radius;
-  const currentRotation = useTransform(rotation, (r) => r);
   const strokeDashoffset = useTransform(rotation, (r) => {
     const val = rotationToValue(r);
     return circumference - (val / 100) * circumference;
   });
-
-  // Responsive size for mobile
-  const isMobile = typeof window !== 'undefined' && window.innerWidth < 640;
-  const responsiveSize = isMobile ? Math.min(size, 200) : size;
 
   return (
     <div
@@ -135,9 +165,16 @@ export default function CrownDial({ value, onChange, size = 240 }: CrownDialProp
       style={{ 
         width: responsiveSize, 
         height: responsiveSize,
-        pointerEvents: 'auto', // Allow interactions
       }}
       onWheel={handleWheel}
+      tabIndex={0}
+      onKeyDown={handleKeyDown}
+      role="slider"
+      aria-label="Intensity dial"
+      aria-valuemin={0}
+      aria-valuemax={100}
+      aria-valuenow={value}
+      aria-orientation="vertical"
     >
       {/* Circular track */}
       <svg
@@ -150,7 +187,7 @@ export default function CrownDial({ value, onChange, size = 240 }: CrownDialProp
         <circle
           cx={responsiveSize / 2}
           cy={responsiveSize / 2}
-          r={(responsiveSize - strokeWidth * 2) / 2}
+          r={radius}
           fill="none"
           stroke="rgba(0, 0, 0, 0.1)"
           strokeWidth={strokeWidth}
@@ -159,12 +196,12 @@ export default function CrownDial({ value, onChange, size = 240 }: CrownDialProp
         <motion.circle
           cx={responsiveSize / 2}
           cy={responsiveSize / 2}
-          r={(responsiveSize - strokeWidth * 2) / 2}
+          r={radius}
           fill="none"
           stroke={getIntensityColor(value)}
           strokeWidth={strokeWidth}
           strokeLinecap="round"
-          strokeDasharray={2 * Math.PI * ((responsiveSize - strokeWidth * 2) / 2)}
+          strokeDasharray={circumference}
           style={{
             strokeDashoffset,
           }}
@@ -172,15 +209,13 @@ export default function CrownDial({ value, onChange, size = 240 }: CrownDialProp
         />
       </svg>
 
-      {/* Draggable knob - only the visible knob, not the whole circle */}
+      {/* Draggable knob - positioned using calculated coordinates */}
       <motion.div
-        className="absolute touch-manipulation"
+        ref={knobRef}
+        className="absolute touch-manipulation focus:outline-none focus:ring-2 focus:ring-[#F9A32A] focus:ring-offset-2 rounded-full"
         style={{
-          top: strokeWidth,
-          left: '50%',
-          transform: 'translateX(-50%)',
-          width: isMobile ? 36 : 40, // Larger touch target for easier interaction
-          height: isMobile ? 36 : 40,
+          width: isMobile ? 32 : 36,
+          height: isMobile ? 32 : 36,
           borderRadius: '50%',
           background: getIntensityColor(value),
           boxShadow: `0 0 ${isMobile ? 12 : 16}px ${getIntensityColor(value)}80`,
@@ -188,19 +223,17 @@ export default function CrownDial({ value, onChange, size = 240 }: CrownDialProp
           zIndex: 15,
           pointerEvents: 'auto',
           cursor: 'grab',
-          rotate: currentRotation,
+          x: useTransform(knobPosition, (pos) => pos.x - (isMobile ? 16 : 18)),
+          y: useTransform(knobPosition, (pos) => pos.y - (isMobile ? 16 : 18)),
         }}
-        drag
-        dragConstraints={{ left: 0, right: 0, top: 0, bottom: 0 }}
-        dragElastic={0}
-        dragMomentum={false}
-        onDragStart={handleDragStart}
-        onDrag={handleDrag}
-        onDragEnd={handleDragEnd}
-        whileDrag={{ scale: 1.1 }}
+        onPointerDown={handlePointerDown}
+        onPointerMove={handlePointerMove}
+        onPointerUp={handlePointerUp}
+        whileDrag={{ scale: 1.1, cursor: 'grabbing' }}
         animate={{
           scale: isDragging ? 1.1 : 1,
         }}
+        transition={{ type: 'spring', stiffness: 300, damping: 25 }}
       />
 
       {/* Center display */}
@@ -214,7 +247,7 @@ export default function CrownDial({ value, onChange, size = 240 }: CrownDialProp
           animate={{
             scale: isDragging ? 1.05 : 1,
           }}
-          transition={{ type: 'spring', stiffness: 300, damping: 20 }}
+          transition={{ type: 'spring', stiffness: 300, damping: 20, duration: 0.08 }}
         >
           {Math.round(value)}
         </motion.div>
