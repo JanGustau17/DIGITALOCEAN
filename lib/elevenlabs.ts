@@ -18,14 +18,11 @@ export const speak = async (text: string, options: { rate?: number; pitch?: numb
 
   // Get API key and Voice ID from environment variables
   // In Next.js, NEXT_PUBLIC_ vars are available at runtime in the browser
-  const apiKey = typeof window !== 'undefined' 
-    ? (process.env.NEXT_PUBLIC_ELEVENLABS_API_KEY || '')
-    : (process.env.NEXT_PUBLIC_ELEVENLABS_API_KEY || '');
+  const apiKey = process.env.NEXT_PUBLIC_ELEVENLABS_API_KEY || '';
   
   // Your preferred voice ID - ensure it's in .env.local as NEXT_PUBLIC_ELEVENLABS_VOICE_ID
-  const voiceId = typeof window !== 'undefined'
-    ? (process.env.NEXT_PUBLIC_ELEVENLABS_VOICE_ID || 'yj30vwTGJxSHezdAGsv9')
-    : (process.env.NEXT_PUBLIC_ELEVENLABS_VOICE_ID || 'yj30vwTGJxSHezdAGsv9');
+  // Use the one from .env.local, fallback to your preferred one
+  const voiceId = process.env.NEXT_PUBLIC_ELEVENLABS_VOICE_ID || 'yj30vwTGJxSHezdAGsv9';
 
   // Debug logging - always log to help debug
   if (typeof window !== 'undefined') {
@@ -34,8 +31,10 @@ export const speak = async (text: string, options: { rate?: number; pitch?: numb
       hasVoiceId: !!voiceId,
       voiceId: voiceId,
       envVoiceId: process.env.NEXT_PUBLIC_ELEVENLABS_VOICE_ID,
-      usingVoiceId: voiceId
+      usingVoiceId: voiceId,
+      allEnvVars: Object.keys(process.env).filter(k => k.includes('ELEVENLABS'))
     });
+    console.log('🎯 ACTUAL VOICE ID BEING USED:', voiceId);
   }
 
   if (!apiKey) {

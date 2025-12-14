@@ -1,0 +1,61 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Unpack - User Flow Diagram</title>
+    <script src="https://cdn.jsdelivr.net/npm/mermaid/dist/mermaid.min.js"></script>
+    <style>
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+            background: #FFFFF0;
+            padding: 40px;
+            margin: 0;
+        }
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+            background: white;
+            padding: 40px;
+            border-radius: 20px;
+            box-shadow: 0 4px 20px rgba(0,0,0,0.1);
+        }
+        h1 {
+            color: #333;
+            text-align: center;
+            margin-bottom: 40px;
+        }
+        .mermaid {
+            background: white;
+            padding: 20px;
+            border-radius: 10px;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>Unpack - User Flow</h1>
+        <div class="mermaid">
+flowchart TD
+    A[Welcome Page<br/>Relaxing Loader Animation] --> B[Intensity Selection<br/>Circular Dial 0-100<br/>Walking Broccoli Animation]
+    B --> C[Word Selection<br/>Choose Emotion Words<br/>Hugging Animation]
+    C --> D[Impact Selection<br/>What's Making You Feel This Way<br/>Cute Doggie Animation]
+    D --> E[AI Support Activities<br/>Personalized Activities<br/>Activity-Specific Animations]
+    E --> F[Closing Page<br/>Celebration<br/>Happy Animation]
+    F --> G[History Page<br/>Charts & Insights]
+    
+    style A fill:#FFFFF0,stroke:#F9A32A,stroke-width:3px
+    style B fill:#FFFFF0,stroke:#F9A32A,stroke-width:3px
+    style C fill:#FFFFF0,stroke:#F9A32A,stroke-width:3px
+    style D fill:#FFFFF0,stroke:#F9A32A,stroke-width:3px
+    style E fill:#FFFFF0,stroke:#F9A32A,stroke-width:3px
+    style F fill:#FFFFF0,stroke:#F9A32A,stroke-width:3px
+    style G fill:#FFFFF0,stroke:#F9A32A,stroke-width:3px
+        </div>
+    </div>
+    <script>
+        mermaid.initialize({ startOnLoad: true, theme: 'default' });
+    </script>
+</body>
+</html>
+

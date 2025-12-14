@@ -13,6 +13,7 @@ export default function CrownDial({ value, onChange, size = 240 }: CrownDialProp
   const [isDragging, setIsDragging] = useState(false);
   const containerRef = useRef<HTMLDivElement>(null);
   const rotation = useMotionValue(valueToRotation(value));
+  const lastAngleRef = useRef<number | null>(null);
   
   // Map value (0-100) to rotation (0 to 360 degrees, starting from top)
   function valueToRotation(val: number): number {
@@ -29,28 +30,64 @@ export default function CrownDial({ value, onChange, size = 240 }: CrownDialProp
   useEffect(() => {
     if (!isDragging) {
       rotation.set(valueToRotation(value));
+      lastAngleRef.current = null;
     }
-  }, [value, isDragging]);
+  }, [value, isDragging, rotation]);
 
-  const handleDrag = (_: MouseEvent | TouchEvent | PointerEvent, info: PanInfo) => {
-    // Calculate rotation based on drag delta (circular motion)
-    const currentRot = rotation.get();
+  const handleDragStart = () => {
+    setIsDragging(true);
+    lastAngleRef.current = null;
+  };
+
+  const handleDrag = (event: MouseEvent | TouchEvent | PointerEvent, info: PanInfo) => {
+    if (!containerRef.current) return;
     
-    // Calculate angle from center for circular dragging
-    const deltaX = info.delta.x;
-    const deltaY = info.delta.y;
+    const rect = containerRef.current.getBoundingClientRect();
+    const centerX = rect.left + rect.width / 2;
+    const centerY = rect.top + rect.height / 2;
     
-    // Convert cartesian delta to angular rotation
-    // Negative deltaY (up) = increase, positive deltaY (down) = decrease
-    // Positive deltaX (right) = increase, negative deltaX (left) = decrease
-    const angleDelta = -(deltaX + deltaY) * 0.5; // Combine both axes, negative for natural feel
+    // Get current pointer position
+    const clientX = 'touches' in event && event.touches.length > 0 
+      ? event.touches[0].clientX 
+      : 'clientX' in event 
+        ? event.clientX 
+        : centerX;
+    const clientY = 'touches' in event && event.touches.length > 0 
+      ? event.touches[0].clientY 
+      : 'clientY' in event 
+        ? event.clientY 
+        : centerY;
     
-    const newRot = currentRot + angleDelta;
-    const normalizedRot = ((newRot % 360) + 360) % 360;
+    // Calculate angle from center (in radians, then convert to degrees)
+    // atan2 gives angle from positive x-axis, we adjust to start from top (0° = top)
+    const angleRad = Math.atan2(clientY - centerY, clientX - centerX);
+    let angleDeg = (angleRad * 180) / Math.PI + 90; // +90 to start from top
+    if (angleDeg < 0) angleDeg += 360;
+    if (angleDeg >= 360) angleDeg -= 360;
     
-    rotation.set(normalizedRot);
-    const newValue = rotationToValue(normalizedRot);
-    onChange(Math.round(newValue));
+    // Calculate rotation delta from last angle
+    if (lastAngleRef.current !== null) {
+      let delta = angleDeg - lastAngleRef.current;
+      
+      // Handle wrap-around (crossing 0/360 boundary)
+      if (delta > 180) delta -= 360;
+      if (delta < -180) delta += 360;
+      
+      const currentRot = rotation.get();
+      const newRot = currentRot + delta;
+      const normalizedRot = ((newRot % 360) + 360) % 360;
+      
+      rotation.set(normalizedRot);
+      const newValue = rotationToValue(normalizedRot);
+      onChange(Math.round(newValue));
+    }
+    
+    lastAngleRef.current = angleDeg;
+  };
+
+  const handleDragEnd = () => {
+    setIsDragging(false);
+    lastAngleRef.current = null;
   };
 
   const handleWheel = (e: React.WheelEvent) => {
@@ -87,39 +124,43 @@ export default function CrownDial({ value, onChange, size = 240 }: CrownDialProp
     return circumference - (val / 100) * circumference;
   });
 
+  // Responsive size for mobile
+  const isMobile = typeof window !== 'undefined' && window.innerWidth < 640;
+  const responsiveSize = isMobile ? Math.min(size, 200) : size;
+
   return (
     <div
       ref={containerRef}
-      className="relative flex flex-col items-center justify-center"
-      style={{ width: size, height: size }}
+      className="relative flex flex-col items-center justify-center touch-none"
+      style={{ width: responsiveSize, height: responsiveSize }}
       onWheel={handleWheel}
     >
       {/* Circular track */}
       <svg
-        width={size}
-        height={size}
+        width={responsiveSize}
+        height={responsiveSize}
         className="absolute"
         style={{ transform: 'rotate(-90deg)' }}
       >
         {/* Background track */}
         <circle
-          cx={size / 2}
-          cy={size / 2}
-          r={radius}
+          cx={responsiveSize / 2}
+          cy={responsiveSize / 2}
+          r={(responsiveSize - strokeWidth * 2) / 2}
           fill="none"
           stroke="rgba(0, 0, 0, 0.1)"
           strokeWidth={strokeWidth}
         />
         {/* Progress track */}
         <motion.circle
-          cx={size / 2}
-          cy={size / 2}
-          r={radius}
+          cx={responsiveSize / 2}
+          cy={responsiveSize / 2}
+          r={(responsiveSize - strokeWidth * 2) / 2}
           fill="none"
           stroke={getIntensityColor(value)}
           strokeWidth={strokeWidth}
           strokeLinecap="round"
-          strokeDasharray={circumference}
+          strokeDasharray={2 * Math.PI * ((responsiveSize - strokeWidth * 2) / 2)}
           style={{
             strokeDashoffset,
           }}
@@ -129,10 +170,10 @@ export default function CrownDial({ value, onChange, size = 240 }: CrownDialProp
 
       {/* Draggable area - full circle for easier interaction */}
       <motion.div
-        className="absolute cursor-grab active:cursor-grabbing"
+        className="absolute cursor-grab active:cursor-grabbing touch-none"
         style={{
-          width: size,
-          height: size,
+          width: responsiveSize,
+          height: responsiveSize,
           rotate: currentRotation,
           zIndex: 10,
         }}
@@ -140,26 +181,24 @@ export default function CrownDial({ value, onChange, size = 240 }: CrownDialProp
         dragConstraints={{ left: 0, right: 0, top: 0, bottom: 0 }}
         dragElastic={0}
         dragMomentum={false}
-        onDragStart={() => setIsDragging(true)}
+        onDragStart={handleDragStart}
         onDrag={handleDrag}
-        onDragEnd={() => {
-          setIsDragging(false);
-        }}
+        onDragEnd={handleDragEnd}
         whileDrag={{ scale: 1.01 }}
       >
-        {/* Knob/handle */}
+        {/* Knob/handle - positioned at top when rotation is 0 */}
         <motion.div
           className="absolute"
           style={{
             top: strokeWidth,
             left: '50%',
             transform: 'translateX(-50%)',
-            width: 20,
-            height: 20,
+            width: isMobile ? 18 : 20,
+            height: isMobile ? 18 : 20,
             borderRadius: '50%',
             background: getIntensityColor(value),
-            boxShadow: `0 0 16px ${getIntensityColor(value)}80`,
-            border: '2.5px solid rgba(255, 255, 255, 0.9)',
+            boxShadow: `0 0 ${isMobile ? 12 : 16}px ${getIntensityColor(value)}80`,
+            border: `${isMobile ? 2 : 2.5}px solid rgba(255, 255, 255, 0.9)`,
             zIndex: 20,
           }}
           animate={{
@@ -174,7 +213,7 @@ export default function CrownDial({ value, onChange, size = 240 }: CrownDialProp
         style={{ zIndex: 0 }}
       >
         <motion.div
-          className="text-4xl sm:text-5xl font-light mb-1"
+          className={`${isMobile ? 'text-3xl' : 'text-4xl sm:text-5xl'} font-light mb-1`}
           style={{ color: getIntensityColor(value) }}
           animate={{
             scale: isDragging ? 1.05 : 1,
@@ -184,7 +223,7 @@ export default function CrownDial({ value, onChange, size = 240 }: CrownDialProp
           {Math.round(value)}
         </motion.div>
         <div
-          className="text-lg sm:text-xl font-medium"
+          className={`${isMobile ? 'text-base' : 'text-lg sm:text-xl'} font-medium`}
           style={{ color: getIntensityColor(value) }}
         >
           {getIntensityLabel(value)}

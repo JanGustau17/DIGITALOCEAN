@@ -301,8 +301,16 @@ export default function CheckInPage() {
             >
               <div className="flex flex-col items-center gap-4">
                 <PageAnimation step="intensity" intensity={intensity} size={180} />
-                <CrownDial value={intensity} onChange={setIntensity} />
-                <Button onClick={handleNext} disabled={isProcessing || isSpeaking}>
+                <CrownDial value={intensity} onChange={setIntensity} size={200} />
+                <Button 
+                  onClick={() => {
+                    if (!isProcessing && !isSpeaking) {
+                      handleNext();
+                    }
+                  }} 
+                  disabled={isProcessing || isSpeaking}
+                  className="w-full max-w-xs"
+                >
                   Continue
                 </Button>
               </div>

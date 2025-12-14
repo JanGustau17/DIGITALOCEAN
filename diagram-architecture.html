@@ -1,0 +1,80 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Unpack - Architecture Diagram</title>
+    <script src="https://cdn.jsdelivr.net/npm/mermaid/dist/mermaid.min.js"></script>
+    <style>
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+            background: #FFFFF0;
+            padding: 40px;
+            margin: 0;
+        }
+        .container {
+            max-width: 1400px;
+            margin: 0 auto;
+            background: white;
+            padding: 40px;
+            border-radius: 20px;
+            box-shadow: 0 4px 20px rgba(0,0,0,0.1);
+        }
+        h1 {
+            color: #333;
+            text-align: center;
+            margin-bottom: 40px;
+        }
+        .mermaid {
+            background: white;
+            padding: 20px;
+            border-radius: 10px;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>Unpack - Architecture</h1>
+        <div class="mermaid">
+graph TB
+    subgraph Frontend["Frontend (Next.js 14)"]
+        A[Check-In Flow<br/>page.tsx]
+        B[History Page<br/>history/page.tsx]
+        C[CrownDial Component]
+        D[PageAnimation Component]
+        E[ActivityAnimation Component]
+        F[StepShell Component]
+    end
+    
+    subgraph APIs["External APIs"]
+        G[OpenAI GPT-4<br/>AI Agent]
+        H[GradientAI<br/>Fallback AI]
+        I[ElevenLabs<br/>Text-to-Speech]
+    end
+    
+    subgraph Storage["Data Storage"]
+        J[LocalStorage<br/>Privacy-First]
+    end
+    
+    A --> C
+    A --> D
+    A --> E
+    A --> F
+    A --> K[API Route<br/>/api/agent]
+    K --> G
+    K --> H
+    A --> I
+    A --> J
+    B --> J
+    
+    style Frontend fill:#E8F4F8,stroke:#F9A32A,stroke-width:2px
+    style APIs fill:#FFF4E6,stroke:#F9A32A,stroke-width:2px
+    style Storage fill:#F0F8F0,stroke:#F9A32A,stroke-width:2px
+        </div>
+    </div>
+    <script>
+        mermaid.initialize({ startOnLoad: true, theme: 'default' });
+    </script>
+</body>
+</html>
+
