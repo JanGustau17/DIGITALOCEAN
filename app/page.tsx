@@ -300,9 +300,11 @@ export default function CheckInPage() {
               totalSteps={TOTAL_STEPS}
               phase={config.phase}
             >
-              <div className="flex flex-col items-center gap-2 sm:gap-3 md:gap-4 w-full">
+              <div className="flex flex-col items-center gap-2 sm:gap-3 md:gap-4 w-full relative">
                 <PageAnimation step="intensity" intensity={intensity} size={120} />
-                <CrownDial value={intensity} onChange={setIntensity} size={180} />
+                <div className="relative" style={{ pointerEvents: 'auto' }}>
+                  <CrownDial value={intensity} onChange={setIntensity} size={180} />
+                </div>
                 <Button 
                   onClick={() => {
                     if (!isProcessing && !isSpeaking) {
@@ -311,7 +313,7 @@ export default function CheckInPage() {
                     }
                   }} 
                   disabled={isProcessing || isSpeaking}
-                  className="w-full max-w-xs mt-2 touch-manipulation"
+                  className="w-full max-w-xs mt-2 touch-manipulation relative z-50"
                   size="md"
                 >
                   Continue

@@ -131,8 +131,12 @@ export default function CrownDial({ value, onChange, size = 240 }: CrownDialProp
   return (
     <div
       ref={containerRef}
-      className="relative flex flex-col items-center justify-center touch-none"
-      style={{ width: responsiveSize, height: responsiveSize }}
+      className="relative flex flex-col items-center justify-center"
+      style={{ 
+        width: responsiveSize, 
+        height: responsiveSize,
+        pointerEvents: 'auto', // Allow interactions
+      }}
       onWheel={handleWheel}
     >
       {/* Circular track */}
@@ -168,14 +172,23 @@ export default function CrownDial({ value, onChange, size = 240 }: CrownDialProp
         />
       </svg>
 
-      {/* Draggable area - full circle for easier interaction */}
+      {/* Draggable knob - only the visible knob, not the whole circle */}
       <motion.div
-        className="absolute cursor-grab active:cursor-grabbing touch-none"
+        className="absolute touch-manipulation"
         style={{
-          width: responsiveSize,
-          height: responsiveSize,
+          top: strokeWidth,
+          left: '50%',
+          transform: 'translateX(-50%)',
+          width: isMobile ? 36 : 40, // Larger touch target for easier interaction
+          height: isMobile ? 36 : 40,
+          borderRadius: '50%',
+          background: getIntensityColor(value),
+          boxShadow: `0 0 ${isMobile ? 12 : 16}px ${getIntensityColor(value)}80`,
+          border: `${isMobile ? 3 : 3.5}px solid rgba(255, 255, 255, 0.9)`,
+          zIndex: 15,
+          pointerEvents: 'auto',
+          cursor: 'grab',
           rotate: currentRotation,
-          zIndex: 10,
         }}
         drag
         dragConstraints={{ left: 0, right: 0, top: 0, bottom: 0 }}
@@ -184,28 +197,11 @@ export default function CrownDial({ value, onChange, size = 240 }: CrownDialProp
         onDragStart={handleDragStart}
         onDrag={handleDrag}
         onDragEnd={handleDragEnd}
-        whileDrag={{ scale: 1.01 }}
-      >
-        {/* Knob/handle - positioned at top when rotation is 0 */}
-        <motion.div
-          className="absolute"
-          style={{
-            top: strokeWidth,
-            left: '50%',
-            transform: 'translateX(-50%)',
-            width: isMobile ? 18 : 20,
-            height: isMobile ? 18 : 20,
-            borderRadius: '50%',
-            background: getIntensityColor(value),
-            boxShadow: `0 0 ${isMobile ? 12 : 16}px ${getIntensityColor(value)}80`,
-            border: `${isMobile ? 2 : 2.5}px solid rgba(255, 255, 255, 0.9)`,
-            zIndex: 20,
-          }}
-          animate={{
-            scale: isDragging ? 1.15 : 1,
-          }}
-        />
-      </motion.div>
+        whileDrag={{ scale: 1.1 }}
+        animate={{
+          scale: isDragging ? 1.1 : 1,
+        }}
+      />
 
       {/* Center display */}
       <div 
