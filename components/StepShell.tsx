@@ -34,7 +34,7 @@ export default function StepShell({
   phase,
 }: StepShellProps) {
   return (
-    <div className="min-h-screen ambient-gradient flex flex-col items-center justify-center p-4 sm:p-6 relative overflow-hidden">
+    <div className="h-screen ambient-gradient flex flex-col items-center justify-center p-2 sm:p-4 md:p-6 relative overflow-hidden">
       {/* Ambient Lottie layer - optional, won't break if it fails */}
       {typeof window !== 'undefined' && (
         <LottieLayer 
@@ -45,29 +45,33 @@ export default function StepShell({
       )}
       
       {/* Content container - centered column */}
-      <div className="relative z-10 w-full max-w-[520px] flex flex-col">
-        {/* Back button */}
+      <div className="relative z-10 w-full max-w-[520px] flex flex-col h-full justify-center">
+        {/* Back button - positioned inside viewport */}
         {showBack && onBack && (
           <motion.button
-            onClick={onBack}
-            className="absolute -top-12 left-0 sm:left-4 w-10 h-10 rounded-full glass flex items-center justify-center text-gray-600 hover:bg-white/60 transition-all duration-200 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2"
+            onClick={(e) => {
+              e.preventDefault();
+              e.stopPropagation();
+              onBack();
+            }}
+            className="absolute top-2 left-2 sm:top-4 sm:left-4 w-9 h-9 sm:w-10 sm:h-10 rounded-full glass flex items-center justify-center text-gray-600 hover:bg-white/60 transition-all duration-200 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 z-50 touch-manipulation"
             whileHover={{ scale: 1.1 }}
             whileTap={{ scale: 0.95 }}
             aria-label="Go back"
           >
-            <ArrowLeft size={20} />
+            <ArrowLeft size={18} className="sm:w-5 sm:h-5" />
           </motion.button>
         )}
 
         {/* Progress indicator */}
         {currentStep && totalSteps && (
-          <div className="mb-6">
-            <div className="flex items-center justify-between mb-2">
+          <div className="mb-2 sm:mb-4">
+            <div className="flex items-center justify-between mb-1">
               <span className="text-xs text-gray-500 font-medium">
                 Step {currentStep} of {totalSteps}
               </span>
               {phase && (
-                <span className="text-xs text-gray-400 uppercase tracking-wider">
+                <span className="text-xs text-gray-400 uppercase tracking-wider hidden sm:inline">
                   {phase}
                 </span>
               )}
@@ -85,16 +89,15 @@ export default function StepShell({
 
         {/* Main card panel */}
         <motion.div
-          className="glass rounded-3xl shadow-xl p-6 sm:p-8 relative z-20"
+          className="glass rounded-2xl sm:rounded-3xl shadow-xl p-4 sm:p-6 md:p-8 relative z-20 flex-1 flex flex-col justify-center overflow-y-auto"
           initial={{ opacity: 0, y: 20 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ duration: 0.4 }}
-          style={{ minHeight: '200px' }}
         >
           {/* Title */}
           {title && (
             <motion.h1
-              className="text-2xl sm:text-3xl font-light text-gray-800 mb-2 text-center"
+              className="text-xl sm:text-2xl md:text-3xl font-light text-gray-800 mb-1 sm:mb-2 text-center"
               initial={{ opacity: 0, y: -10 }}
               animate={{ opacity: 1, y: 0 }}
               transition={{ duration: 0.4 }}
@@ -106,7 +109,7 @@ export default function StepShell({
           {/* Subtitle */}
           {subtitle && (
             <motion.p
-              className="text-sm sm:text-base text-gray-500 mb-4 text-center font-light"
+              className="text-xs sm:text-sm md:text-base text-gray-500 mb-2 sm:mb-4 text-center font-light"
               initial={{ opacity: 0 }}
               animate={{ opacity: 1 }}
               transition={{ duration: 0.4, delay: 0.1 }}
@@ -116,14 +119,14 @@ export default function StepShell({
           )}
 
           {/* Main content */}
-          <div className="w-full">
+          <div className="w-full flex-1 flex flex-col justify-center">
             {children}
           </div>
         </motion.div>
 
         {/* Footer safety text */}
         <motion.p
-          className="mt-8 text-xs text-gray-400 text-center"
+          className="mt-2 sm:mt-4 text-xs text-gray-400 text-center"
           initial={{ opacity: 0 }}
           animate={{ opacity: 1 }}
           transition={{ delay: 0.5 }}

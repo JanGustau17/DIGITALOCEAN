@@ -41,6 +41,15 @@
     background-color: #FFFFF0;
     @apply text-gray-900 antialiased;
     font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', 'Oxygen', 'Ubuntu', 'Cantarell', 'Fira Sans', 'Droid Sans', 'Helvetica Neue', sans-serif;
+    overflow: hidden; /* Prevent body scroll */
+    height: 100vh;
+    position: fixed;
+    width: 100%;
+  }
+  
+  html {
+    overflow: hidden;
+    height: 100%;
   }
 }
 

@@ -257,13 +257,13 @@ export default function CheckInPage() {
               subtitle="Let&apos;s check in together"
               showBack={false}
             >
-              <div className="flex flex-col items-center gap-4">
+              <div className="flex flex-col items-center gap-2 sm:gap-3 md:gap-4 w-full">
                 <motion.div
                   initial={{ scale: 0.9, opacity: 0 }}
                   animate={{ scale: 1, opacity: 1 }}
                   transition={{ delay: 0.3 }}
                 >
-                  <PageAnimation step="intro" size={200} />
+                  <PageAnimation step="intro" size={140} />
                 </motion.div>
                 <Button 
                   onClick={() => {
@@ -272,6 +272,7 @@ export default function CheckInPage() {
                       setStep('intensity');
                     }, 200);
                   }}
+                  className="w-full max-w-xs touch-manipulation"
                 >
                   Let&apos;s Begin
                 </Button>
@@ -299,17 +300,19 @@ export default function CheckInPage() {
               totalSteps={TOTAL_STEPS}
               phase={config.phase}
             >
-              <div className="flex flex-col items-center gap-4">
-                <PageAnimation step="intensity" intensity={intensity} size={180} />
-                <CrownDial value={intensity} onChange={setIntensity} size={200} />
+              <div className="flex flex-col items-center gap-2 sm:gap-3 md:gap-4 w-full">
+                <PageAnimation step="intensity" intensity={intensity} size={120} />
+                <CrownDial value={intensity} onChange={setIntensity} size={180} />
                 <Button 
                   onClick={() => {
                     if (!isProcessing && !isSpeaking) {
+                      stopSpeaking();
                       handleNext();
                     }
                   }} 
                   disabled={isProcessing || isSpeaking}
-                  className="w-full max-w-xs"
+                  className="w-full max-w-xs mt-2 touch-manipulation"
+                  size="md"
                 >
                   Continue
                 </Button>
@@ -337,9 +340,9 @@ export default function CheckInPage() {
               totalSteps={TOTAL_STEPS}
               phase={config.phase}
             >
-              <div className="flex flex-col items-center gap-4">
-                <PageAnimation step="words" intensity={intensity} words={selectedWords} size={160} />
-                <div className="grid grid-cols-2 gap-3 w-full">
+              <div className="flex flex-col items-center gap-2 sm:gap-3 md:gap-4 w-full">
+                <PageAnimation step="words" intensity={intensity} words={selectedWords} size={100} />
+                <div className="grid grid-cols-2 gap-2 sm:gap-3 w-full">
                   {WORDS.map(word => {
                     const isSelected = selectedWords.includes(word.text);
                     return (
@@ -402,9 +405,9 @@ export default function CheckInPage() {
               totalSteps={TOTAL_STEPS}
               phase={config.phase}
             >
-              <div className="flex flex-col items-center gap-4">
-                <PageAnimation step="impact" intensity={intensity} words={selectedWords} size={160} />
-                <div className="grid grid-cols-2 gap-3 w-full">
+              <div className="flex flex-col items-center gap-2 sm:gap-3 md:gap-4 w-full">
+                <PageAnimation step="impact" intensity={intensity} words={selectedWords} size={100} />
+                <div className="grid grid-cols-2 gap-2 sm:gap-3 w-full">
                   {IMPACTS.map(imp => {
                     const isSelected = impact === imp.text;
                     return (
@@ -436,7 +439,17 @@ export default function CheckInPage() {
                     );
                   })}
                 </div>
-                <Button onClick={handleSkip} variant="secondary" disabled={isProcessing || isSpeaking}>
+                <Button 
+                  onClick={() => {
+                    if (!isProcessing && !isSpeaking) {
+                      stopSpeaking();
+                      handleSkip();
+                    }
+                  }} 
+                  variant="secondary" 
+                  disabled={isProcessing || isSpeaking}
+                  className="w-full max-w-xs touch-manipulation"
+                >
                   Skip
                 </Button>
               </div>
@@ -463,45 +476,69 @@ export default function CheckInPage() {
               totalSteps={TOTAL_STEPS}
               phase={config.phase}
             >
-              <div className="flex flex-col items-center gap-3">
+              <div className="flex flex-col items-center gap-2 sm:gap-3 w-full">
                 {isLoadingActivity ? (
-                  <div className="text-gray-500 text-lg">Loading something fun...</div>
+                  <div className="text-gray-500 text-base sm:text-lg">Loading something fun...</div>
                 ) : currentActivity ? (
                   <>
                     {/* Activity Animation - fills the gap */}
                     <ActivityAnimation 
                       activityType={currentActivity.type}
                       words={selectedWords}
-                      size={200}
+                      size={140}
                     />
                     
-                    <Card padding="lg" className="w-full">
-                      <p className="text-lg text-gray-700 text-center leading-relaxed">
+                    <Card padding="md" className="w-full">
+                      <p className="text-sm sm:text-base md:text-lg text-gray-700 text-center leading-relaxed">
                         {currentActivity.text}
                       </p>
                     </Card>
-                    <div className="flex gap-3 w-full flex-wrap">
-                      <Button onClick={handleNext} disabled={isProcessing || isSpeaking} className="flex-1 min-w-[120px]">
-                        I&apos;ll Try It
-                      </Button>
+                    <div className="flex flex-col sm:flex-row gap-2 sm:gap-3 w-full">
                       <Button 
                         onClick={() => {
-                          stopSpeaking();
-                          setCurrentActivity(null);
-                          if (activityIndex < 2) {
-                            setActivityIndex(prev => prev + 1);
-                          } else {
-                            loadActivity();
+                          if (!isProcessing && !isSpeaking) {
+                            stopSpeaking();
+                            handleNext();
                           }
                         }} 
-                        variant="secondary" 
-                        disabled={isProcessing || isSpeaking}
+                        disabled={isProcessing || isSpeaking} 
+                        className="flex-1 w-full touch-manipulation"
                       >
-                        Different one
+                        I&apos;ll Try It
                       </Button>
-                      <Button onClick={handleSkip} variant="secondary" disabled={isProcessing || isSpeaking}>
-                        Skip
-                      </Button>
+                      <div className="flex gap-2 sm:gap-3">
+                        <Button 
+                          onClick={() => {
+                            stopSpeaking();
+                            setCurrentActivity(null);
+                            if (activityIndex < 2) {
+                              setActivityIndex(prev => prev + 1);
+                            } else {
+                              loadActivity();
+                            }
+                          }} 
+                          variant="secondary" 
+                          disabled={isProcessing || isSpeaking}
+                          className="flex-1 touch-manipulation"
+                          size="sm"
+                        >
+                          Different one
+                        </Button>
+                        <Button 
+                          onClick={() => {
+                            if (!isProcessing && !isSpeaking) {
+                              stopSpeaking();
+                              handleSkip();
+                            }
+                          }} 
+                          variant="secondary" 
+                          disabled={isProcessing || isSpeaking}
+                          className="flex-1 touch-manipulation"
+                          size="sm"
+                        >
+                          Skip
+                        </Button>
+                      </div>
                     </div>
                   </>
                 ) : null}
@@ -521,9 +558,17 @@ export default function CheckInPage() {
               title="You did amazing!"
               subtitle="I&apos;m so proud of you"
             >
-              <div className="flex flex-col items-center gap-4">
-                <PageAnimation step="closing" intensity={intensity} words={selectedWords} size={200} />
-                <Button onClick={() => router.push('/history')} disabled={isProcessing}>
+              <div className="flex flex-col items-center gap-2 sm:gap-3 md:gap-4 w-full">
+                <PageAnimation step="closing" intensity={intensity} words={selectedWords} size={140} />
+                <Button 
+                  onClick={() => {
+                    if (!isProcessing) {
+                      router.push('/history');
+                    }
+                  }} 
+                  disabled={isProcessing}
+                  className="w-full max-w-xs touch-manipulation"
+                >
                   See My History
                 </Button>
                 <motion.p

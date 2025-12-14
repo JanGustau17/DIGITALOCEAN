@@ -36,12 +36,19 @@ export default function Button({
 
   return (
     <motion.button
-      onClick={onClick}
+      onClick={(e) => {
+        e.preventDefault();
+        e.stopPropagation();
+        if (!disabled) {
+          onClick();
+        }
+      }}
       disabled={disabled}
-      className={`${baseStyles} ${sizeStyles[size]} ${variantStyles[variant]} ${className}`}
+      className={`${baseStyles} ${sizeStyles[size]} ${variantStyles[variant]} ${className} touch-manipulation`}
       whileHover={disabled ? {} : { scale: 1.02 }}
       whileTap={disabled ? {} : { scale: 0.98 }}
       transition={{ type: 'spring', stiffness: 400, damping: 17 }}
+      style={{ WebkitTapHighlightColor: 'transparent' }}
     >
       {children}
     </motion.button>
