@@ -1,7 +1,7 @@
 'use client';
 
 import { motion } from 'framer-motion';
-import { useState, useCallback, useEffect } from 'react';
+import { useState, useCallback } from 'react';
 
 interface IntensitySliderProps {
   value: number; // 0-100
@@ -43,32 +43,71 @@ export default function IntensitySlider({ value, onChange }: IntensitySliderProp
 
   const color = getIntensityColor(value);
   const label = getIntensityLabel(value);
+  const size = 200; // Fixed size for ring
+  const strokeWidth = 6;
+  const radius = (size - strokeWidth * 2) / 2;
+  const circumference = 2 * Math.PI * radius;
+  const strokeDashoffset = circumference - (value / 100) * circumference;
 
   return (
     <div className="w-full max-w-sm mx-auto flex flex-col items-center gap-6">
-      {/* Large number display */}
-      <motion.div
-        className="flex flex-col items-center gap-2"
-        animate={{
-          scale: isDragging ? 1.05 : 1,
-        }}
-        transition={{ type: 'spring', stiffness: 300, damping: 20 }}
-      >
-        <div
-          className="text-6xl sm:text-7xl font-light"
-          style={{ color }}
+      {/* Visual ring + number display */}
+      <div className="relative" style={{ width: size, height: size }}>
+        {/* SVG Ring - purely visual */}
+        <svg
+          width={size}
+          height={size}
+          className="absolute"
+          style={{ transform: 'rotate(-90deg)' }}
         >
-          {Math.round(value)}
-        </div>
-        <div
-          className="text-xl sm:text-2xl font-medium"
-          style={{ color }}
-        >
-          {label}
-        </div>
-      </motion.div>
+          {/* Background track */}
+          <circle
+            cx={size / 2}
+            cy={size / 2}
+            r={radius}
+            fill="none"
+            stroke="rgba(0, 0, 0, 0.1)"
+            strokeWidth={strokeWidth}
+          />
+          {/* Progress track */}
+          <circle
+            cx={size / 2}
+            cy={size / 2}
+            r={radius}
+            fill="none"
+            stroke={color}
+            strokeWidth={strokeWidth}
+            strokeLinecap="round"
+            strokeDasharray={circumference}
+            strokeDashoffset={strokeDashoffset}
+            style={{
+              transition: 'stroke-dashoffset 0.2s ease-out',
+            }}
+          />
+        </svg>
 
-      {/* Slider */}
+        {/* Center number display */}
+        <div className="absolute inset-0 flex flex-col items-center justify-center pointer-events-none">
+          <motion.div
+            className="text-5xl sm:text-6xl font-light mb-1"
+            style={{ color }}
+            animate={{
+              scale: isDragging ? 1.05 : 1,
+            }}
+            transition={{ type: 'spring', stiffness: 300, damping: 20 }}
+          >
+            {Math.round(value)}
+          </motion.div>
+          <div
+            className="text-lg sm:text-xl font-medium"
+            style={{ color }}
+          >
+            {label}
+          </div>
+        </div>
+      </div>
+
+      {/* Slider control */}
       <div className="w-full relative">
         <input
           type="range"
@@ -125,19 +164,6 @@ export default function IntensitySlider({ value, onChange }: IntensitySliderProp
           `
         }} />
       </div>
-
-      {/* Helper text */}
-      {!isDragging && (
-        <motion.p
-          className="text-xs text-gray-400 text-center"
-          initial={{ opacity: 0 }}
-          animate={{ opacity: [0, 1, 0] }}
-          transition={{ duration: 2, repeat: Infinity }}
-        >
-          Drag or use arrow keys to adjust
-        </motion.p>
-      )}
     </div>
   );
 }
-

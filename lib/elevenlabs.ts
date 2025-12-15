@@ -1,12 +1,20 @@
 // ElevenLabs Text-to-Speech Service for Next.js
 // Based on working implementation
 
+// Feature flag: Set to false to disable voice playback
+const VOICE_ENABLED = false;
+
 let currentAudio: HTMLAudioElement | null = null;
 let isSpeaking = false;
 let speechQueue: Array<{ text: string; options: any }> = [];
 let isProcessingQueue = false;
 
 export const speak = async (text: string, options: { rate?: number; pitch?: number; volume?: number } = {}): Promise<void> => {
+  // Voice disabled - return immediately without blocking
+  if (!VOICE_ENABLED) {
+    return;
+  }
+  
   // Always stop any current speech first
   stopSpeaking();
   

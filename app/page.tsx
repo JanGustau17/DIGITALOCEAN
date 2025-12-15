@@ -11,10 +11,12 @@ import Button from '@/components/ui/Button';
 import Card from '@/components/ui/Card';
 import LottieHero from '@/components/LottieHero';
 import ActivityAnimation from '@/components/ActivityAnimation';
+import ActivitySteps from '@/components/ActivitySteps';
 import PageAnimation from '@/components/PageAnimation';
-import { SessionState, AgentResponse } from '@/lib/types';
+import { SessionState, AgentResponse, StructuredActivityResponse } from '@/lib/types';
 import { saveEntry } from '@/lib/storage';
 import { speak, stopSpeaking, setSpeechStateCallback } from '@/lib/elevenlabs';
+import { getActivityPosterPlaceholder } from '@/lib/openaiImages';
 
 // Words with soft gradient palettes and emojis
 const WORDS = [
@@ -65,9 +67,43 @@ export default function CheckInPage() {
   const [intensity, setIntensity] = useState(50);
   const [selectedWords, setSelectedWords] = useState<string[]>([]);
   const [impact, setImpact] = useState<string | null>(null);
-  const [activityIndex, setActivityIndex] = useState(0);
   const [currentActivity, setCurrentActivity] = useState<{ text: string; type: string } | null>(null);
+  const [structuredActivity, setStructuredActivity] = useState<StructuredActivityResponse | null>(null);
   const [isLoadingActivity, setIsLoadingActivity] = useState(false);
+  const [variationNonce, setVariationNonce] = useState<string>('');
+  const [previousTitles, setPreviousTitles] = useState<string[]>([]);
+  const [activityImage, setActivityImage] = useState<string | null>(null);
+  const [isLoadingImage, setIsLoadingImage] = useState(false);
+  
+  // Client-side cache for activity images (keyed by variationNonce)
+  const imageCacheRef = useRef<Map<string, string>>(new Map());
+  
+  // Load image from cache or localStorage
+  const getCachedImage = (nonce: string): string | null => {
+    // Check in-memory cache first
+    if (imageCacheRef.current.has(nonce)) {
+      return imageCacheRef.current.get(nonce)!;
+    }
+    
+    // Check localStorage
+    if (typeof window !== 'undefined') {
+      const cached = localStorage.getItem(`activity_image_${nonce}`);
+      if (cached) {
+        imageCacheRef.current.set(nonce, cached);
+        return cached;
+      }
+    }
+    
+    return null;
+  };
+  
+  // Save image to cache
+  const setCachedImage = (nonce: string, imageUrl: string): void => {
+    imageCacheRef.current.set(nonce, imageUrl);
+    if (typeof window !== 'undefined') {
+      localStorage.setItem(`activity_image_${nonce}`, imageUrl);
+    }
+  };
   // Load mute state from localStorage
   const [isMuted, setIsMuted] = useState(() => {
     if (typeof window !== 'undefined') {
@@ -87,70 +123,37 @@ export default function CheckInPage() {
     });
   }, []);
 
-  // Auto-speak when step changes - no pause, immediate speech
-  useEffect(() => {
-    if (isMuted) {
-      stopSpeaking();
-      return;
-    }
-
-    // Clear any pending speech
-    if (speechTimeoutRef.current) {
-      clearTimeout(speechTimeoutRef.current);
-    }
-
-    // Stop current speech immediately
-    stopSpeaking();
-
-    // Start speaking immediately (reduced delay for continuous feel)
-    speechTimeoutRef.current = setTimeout(() => {
-      let textToSpeak = '';
-
-      switch (step) {
-        case 'intro':
-          textToSpeak = "How are you feeling? Let's check in together.";
-          break;
-        case 'intensity':
-          textToSpeak = "How big is this feeling? Move the slider to show me.";
-          break;
-        case 'words':
-          textToSpeak = "Do any words fit? Tap the ones that feel right.";
-          break;
-        case 'impact':
-          textToSpeak = "What's making you feel this way? Pick what feels most true.";
-          break;
-        case 'support':
-          textToSpeak = "Let's try something fun! This might help you feel better.";
-          break;
-        case 'closing':
-          textToSpeak = "You did amazing! I'm so proud of you.";
-          break;
-      }
-
-      if (textToSpeak && !isMuted) {
-        // Speak immediately without blocking
-        speak(textToSpeak, { rate: 0.75, pitch: 1.15 }).catch(err => {
-          console.log('Speech error (non-blocking):', err);
-        });
-      }
-    }, 100); // Reduced from 500ms to 100ms for faster, continuous feel
-
-    return () => {
-      if (speechTimeoutRef.current) {
-        clearTimeout(speechTimeoutRef.current);
-      }
-    };
-  }, [step, isMuted]);
+  // Voice disabled - no auto-speak, no blocking behavior
+  // Voice system exists but is inactive - UI flow is uninterrupted
 
   useEffect(() => {
-    if (step === 'support' && activityIndex < 3 && !currentActivity && !isLoadingActivity) {
-      loadActivity();
+    if (step === 'support' && !structuredActivity && !isLoadingActivity) {
+      loadActivity(false);
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [step, activityIndex]);
+  }, [step]);
 
-  const loadActivity = async () => {
+  // Generate UUID for variation nonce
+  const generateNonce = (): string => {
+    return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, (c) => {
+      const r = Math.random() * 16 | 0;
+      const v = c === 'x' ? r : (r & 0x3 | 0x8);
+      return v.toString(16);
+    });
+  };
+
+  const loadActivity = async (regenerate = false) => {
     setIsLoadingActivity(true);
+      setIsLoadingImage(true);
+    
+    // Generate new nonce for this request
+    const newNonce = generateNonce();
+    setVariationNonce(newNonce);
+    
+    // Clear image immediately when regenerating
+    if (regenerate) {
+      setActivityImage(null);
+    }
     
     const sessionState: SessionState = {
       intensity,
@@ -163,28 +166,118 @@ export default function CheckInPage() {
       const response = await fetch('/api/agent', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ sessionSoFar: sessionState }),
+        body: JSON.stringify({ 
+          sessionSoFar: sessionState,
+          regenerate,
+          variationNonce: newNonce,
+          previousTitles: previousTitles.slice(-3), // Keep last 3 titles
+        }),
+        cache: 'no-store', // Prevent caching
       });
 
-      if (response.ok) {
-        const data: AgentResponse = await response.json();
-        if (data.skip) {
-          setActivityIndex(prev => prev + 1);
-          setIsLoadingActivity(false);
-          return;
+      if (!response.ok) {
+        throw new Error('Failed to load activity');
+      }
+
+      const data: AgentResponse = await response.json();
+      
+      if (data.skip) {
+        handleSkip();
+        return;
+      }
+
+      // API now always returns structured response
+      if (data.structured) {
+        // Debug log (dev only)
+        if (typeof window !== 'undefined' && process.env.NODE_ENV === 'development') {
+          console.log('📦 Structured Activity Response:', {
+            title: data.structured.activityTitle,
+            type: data.structured.activityType,
+            variationNonce: newNonce.substring(0, 8),
+            steps: data.structured.steps.map(s => ({
+              instruction: s.instruction,
+              imagePrompt: s.imagePrompt.substring(0, 50) + '...',
+            })),
+          });
         }
-        setCurrentActivity({
-          text: data.activityText,
-          type: data.activityType,
-        });
+        
+        setStructuredActivity(data.structured);
+        setCurrentActivity(null); // Clear legacy format
+        
+        // Add to previous titles
+        setPreviousTitles(prev => [...prev.slice(-2), data.structured.activityTitle]);
+        
+        // Use placeholder immediately if not cached
+        const placeholderImage = (data as any).activityImage || getActivityPosterPlaceholder();
+        const cachedImage = getCachedImage(newNonce);
+        if (!cachedImage) {
+          setActivityImage(placeholderImage);
+        } else {
+          setActivityImage(cachedImage);
+        }
+        
+        // If image is being generated, load it progressively
+        if ((data as any).generatingImage && data.structured.steps && !cachedImage) {
+          // Set timeout (15s)
+          const timeoutId = setTimeout(() => {
+            console.warn('⏱️ Image generation timeout, keeping placeholder');
+            setIsLoadingImage(false);
+          }, 15000);
+          
+          // Generate single poster image
+          fetch('/api/images', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              steps: data.structured.steps.map((s: any) => ({ instruction: s.instruction })),
+              variationNonce: newNonce,
+              activityType: data.structured.activityType,
+            }),
+            cache: 'no-store',
+          })
+            .then(response => {
+              clearTimeout(timeoutId);
+              if (response.ok) {
+                return response.json();
+              }
+              throw new Error('Failed to generate image');
+            })
+            .then(imageData => {
+              if (imageData.imageUrl) {
+                setActivityImage(imageData.imageUrl);
+                setCachedImage(newNonce, imageData.imageUrl);
+                console.log('✅ Activity poster loaded');
+              }
+              setIsLoadingImage(false);
+            })
+            .catch(error => {
+              clearTimeout(timeoutId);
+              console.error('Failed to load activity poster:', error);
+              setIsLoadingImage(false);
+              // Keep placeholder on error
+            });
+        } else {
+          setIsLoadingImage(false);
+        }
       } else {
-        throw new Error('Agent failed');
+        // Fallback (shouldn't happen, but just in case)
+        console.warn('No structured response, using fallback');
+        const fallback = FALLBACK_ACTIVITIES[parseInt(newNonce.substring(0, 2), 16) % FALLBACK_ACTIVITIES.length];
+        setStructuredActivity(null);
+        setCurrentActivity(fallback);
+        setActivityImage(null);
       }
     } catch (error) {
-      const fallback = FALLBACK_ACTIVITIES[activityIndex % FALLBACK_ACTIVITIES.length];
+      console.error('Error loading activity:', error);
+      // Fallback to hardcoded activity
+      const fallbackNonce = variationNonce || generateNonce();
+      const fallback = FALLBACK_ACTIVITIES[parseInt(fallbackNonce.substring(0, 2), 16) % FALLBACK_ACTIVITIES.length];
+      setStructuredActivity(null);
       setCurrentActivity(fallback);
+      setActivityImage(null);
     } finally {
       setIsLoadingActivity(false);
+      // Don't set here - let image loading handle it
     }
   };
 
@@ -197,21 +290,20 @@ export default function CheckInPage() {
       setStep('impact');
     } else if (step === 'impact') {
       setStep('support');
-      setActivityIndex(0);
       setCurrentActivity(null);
+      setStructuredActivity(null);
+      setVariationNonce('');
+      setPreviousTitles([]);
+      setActivityImage(null);
     } else if (step === 'support') {
-      if (activityIndex < 2) {
-        setActivityIndex(prev => prev + 1);
-        setCurrentActivity(null);
-      } else {
-        saveEntry({
-          intensity,
-          words: selectedWords,
-          impact,
-          activityType: currentActivity?.type || null,
-        });
-        setStep('closing');
-      }
+      // Save entry and move to closing
+      saveEntry({
+        intensity,
+        words: selectedWords,
+        impact,
+        activityType: structuredActivity?.activityType || currentActivity?.type || null,
+      });
+      setStep('closing');
     }
   };
 
@@ -221,23 +313,19 @@ export default function CheckInPage() {
     if (step === 'words' || step === 'impact') {
       handleNext();
     } else if (step === 'support') {
-      if (activityIndex < 2) {
-        setActivityIndex(prev => prev + 1);
-        setCurrentActivity(null);
-      } else {
-        saveEntry({
-          intensity,
-          words: selectedWords,
-          impact,
-          activityType: null,
-        });
-        setStep('closing');
-      }
+      // Skip support step - save and move to closing
+      saveEntry({
+        intensity,
+        words: selectedWords,
+        impact,
+        activityType: structuredActivity?.activityType || currentActivity?.type || null,
+      });
+      setStep('closing');
     }
   };
 
   const toggleWord = (word: string) => {
-    if (isSpeaking) return;
+    // Voice disabled - no blocking
     
     setSelectedWords(prev =>
       prev.includes(word) ? prev.filter(w => w !== word) : [...prev, word]
@@ -323,12 +411,12 @@ export default function CheckInPage() {
                 <div className="w-full flex flex-col items-center gap-4 pt-4">
                   <Button 
                     onClick={() => {
-                      if (!isProcessing && !isSpeaking) {
+                      if (!isProcessing) {
                         stopSpeaking();
                         handleNext();
                       }
                     }} 
-                    disabled={isProcessing || isSpeaking}
+                    disabled={isProcessing}
                     className="w-full max-w-xs touch-manipulation"
                     size="md"
                   >
@@ -374,16 +462,16 @@ export default function CheckInPage() {
                             toggleWord(word.text);
                           }
                         }}
-                        disabled={isSpeaking}
+                        disabled={false}
                         className={`px-4 py-3 m-1 rounded-2xl font-medium text-base transition-all relative overflow-hidden flex items-center justify-center gap-2 ${
-                          isSpeaking 
+                          false 
                             ? 'opacity-50 cursor-wait bg-white/60 text-gray-500'
                             : isSelected
                             ? `text-gray-800 shadow-md ring-2 ring-blue-400/50 bg-gradient-to-br ${word.gradient}`
                             : 'bg-white/80 text-gray-700 hover:bg-white hover:shadow-md shadow-sm border border-gray-200'
                         }`}
-                        whileHover={isSpeaking ? {} : { scale: 1.02 }}
-                        whileTap={isSpeaking ? {} : { scale: 0.98 }}
+                        whileHover={{ scale: 1.02 }}
+                        whileTap={{ scale: 0.98 }}
                         transition={{ duration: 0.2 }}
                       >
                         <span className="text-xl">{word.emoji}</span>
@@ -440,16 +528,16 @@ export default function CheckInPage() {
                           setImpact(imp.text);
                           setTimeout(() => handleNext(), 300);
                         }}
-                        disabled={isSpeaking}
+                        disabled={false}
                         className={`px-4 py-4 m-1 rounded-2xl font-medium text-base transition-all relative overflow-hidden flex items-center justify-center gap-2 ${
-                          isSpeaking
+                          false
                             ? 'opacity-50 cursor-wait bg-white/60 text-gray-500'
                             : isSelected
                             ? `text-gray-800 shadow-md ring-2 ring-purple-400/50 bg-gradient-to-br ${imp.gradient}`
                             : 'bg-white/80 text-gray-700 hover:bg-white hover:shadow-md shadow-sm border border-gray-200'
                         }`}
-                        whileHover={isSpeaking ? {} : { scale: 1.02 }}
-                        whileTap={isSpeaking ? {} : { scale: 0.98 }}
+                        whileHover={{ scale: 1.02 }}
+                        whileTap={{ scale: 0.98 }}
                         transition={{ duration: 0.2 }}
                       >
                         <span className="text-xl">{imp.emoji}</span>
@@ -461,13 +549,13 @@ export default function CheckInPage() {
                 <div className="w-full flex justify-center pt-2">
                   <Button 
                     onClick={() => {
-                      if (!isProcessing && !isSpeaking) {
+                      if (!isProcessing) {
                         stopSpeaking();
                         handleSkip();
                       }
                     }} 
                     variant="secondary" 
-                    disabled={isProcessing || isSpeaking}
+                    disabled={isProcessing}
                     className="w-full max-w-xs touch-manipulation"
                   >
                     Skip
@@ -500,9 +588,59 @@ export default function CheckInPage() {
               <div className="flex flex-col items-center gap-6 w-full">
                 {isLoadingActivity ? (
                   <div className="text-gray-500 text-base sm:text-lg">Loading something fun...</div>
+                ) : structuredActivity ? (
+                  <>
+                    {/* Structured 3-step activity */}
+                    <ActivitySteps 
+                      activity={structuredActivity} 
+                      activityImage={activityImage}
+                      isLoadingImage={isLoadingImage}
+                      variationNonce={variationNonce}
+                    />
+                    <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 w-full pt-6">
+                      <Button 
+                        onClick={() => {
+                          if (!isProcessing) {
+                            stopSpeaking();
+                            handleNext();
+                          }
+                        }} 
+                        disabled={isProcessing || isSpeaking || isLoadingActivity} 
+                        className="w-full touch-manipulation whitespace-nowrap h-12 min-w-[120px] px-5 text-sm sm:text-base font-medium"
+                      >
+                        Try it
+                      </Button>
+                      <Button 
+                        onClick={() => {
+                          stopSpeaking();
+                          loadActivity(true); // Regenerate with new idea
+                        }} 
+                        variant="secondary" 
+                        disabled={isProcessing || isSpeaking || isLoadingActivity}
+                        className="w-full touch-manipulation whitespace-nowrap h-12 min-w-[120px] px-5 text-sm sm:text-base font-medium"
+                        size="sm"
+                      >
+                        {isLoadingActivity ? 'Loading...' : 'New idea'}
+                      </Button>
+                      <Button 
+                        onClick={() => {
+                          if (!isProcessing) {
+                            stopSpeaking();
+                            handleSkip();
+                          }
+                        }} 
+                        variant="secondary" 
+                        disabled={isProcessing || isSpeaking || isLoadingActivity}
+                        className="w-full touch-manipulation whitespace-nowrap h-12 min-w-[120px] px-5 text-sm sm:text-base font-medium"
+                        size="sm"
+                      >
+                        Skip
+                      </Button>
+                    </div>
+                  </>
                 ) : currentActivity ? (
                   <>
-                    {/* Activity Animation */}
+                    {/* Legacy format fallback */}
                     <ActivityAnimation 
                       activityType={currentActivity.type}
                       words={selectedWords}
@@ -517,43 +655,38 @@ export default function CheckInPage() {
                     <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 w-full">
                       <Button 
                         onClick={() => {
-                          if (!isProcessing && !isSpeaking) {
+                          if (!isProcessing) {
                             stopSpeaking();
                             handleNext();
                           }
                         }} 
-                        disabled={isProcessing || isSpeaking} 
-                        className="w-full touch-manipulation whitespace-nowrap sm:col-span-1"
+                        disabled={isProcessing} 
+                        className="w-full touch-manipulation whitespace-nowrap h-12 min-w-[100px] px-4 text-sm sm:text-base"
                       >
-                        I&apos;ll Try It
+                        Try it
                       </Button>
                       <Button 
                         onClick={() => {
                           stopSpeaking();
-                          setCurrentActivity(null);
-                          if (activityIndex < 2) {
-                            setActivityIndex(prev => prev + 1);
-                          } else {
-                            loadActivity();
-                          }
+                          loadActivity(true); // Regenerate
                         }} 
                         variant="secondary" 
-                        disabled={isProcessing || isSpeaking}
-                        className="w-full touch-manipulation whitespace-nowrap"
+                        disabled={isProcessing || isSpeaking || isLoadingActivity}
+                        className="w-full touch-manipulation whitespace-nowrap h-12 min-w-[100px] px-4 text-sm sm:text-base"
                         size="sm"
                       >
-                        Different
+                        {isLoadingActivity ? 'Loading...' : 'New idea'}
                       </Button>
                       <Button 
                         onClick={() => {
-                          if (!isProcessing && !isSpeaking) {
+                          if (!isProcessing) {
                             stopSpeaking();
                             handleSkip();
                           }
                         }} 
                         variant="secondary" 
-                        disabled={isProcessing || isSpeaking}
-                        className="w-full touch-manipulation whitespace-nowrap"
+                        disabled={isProcessing}
+                        className="w-full touch-manipulation whitespace-nowrap h-12 min-w-[100px] px-4 text-sm sm:text-base"
                         size="sm"
                       >
                         Skip
